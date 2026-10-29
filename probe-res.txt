@@ -1,0 +1,31 @@
+мок sms-gateway: порт 51620
+
+=== cloud API (…/api/v1) ===
+  [OK]   send-code -> 200
+  [OK]   sent:true
+  [OK]   не демо (код НЕ показан)
+  [OK]   мок получил ровно 1 запрос
+  [OK]   POST на /api/v1/messages
+  [OK]   Bearer-ключ в заголовке
+  [OK]   плоский to = номер
+  [OK]   плоский text содержит код
+  [OK]   НЕТ phoneNumbers/textMessage
+  [OK]   providers: smsgate + ready
+
+=== cloud API: ошибки провайдера ===
+  [OK]   400 от шлюза -> 502 для клиента
+  [OK]   текст ошибки человеческий (message из error-объекта)
+  [OK]   в ошибке нет [object Object]
+
+=== self-hosted API (…/3rdparty/v1) ===
+  [OK]   send-code -> 200
+  [OK]   sent:true
+  [OK]   POST на /3rdparty/v1/messages
+  [OK]   вложенный phoneNumbers
+  [OK]   вложенный textMessage.text
+
+=== device_id ===
+  [OK]   cloud: deviceId в теле
+  [OK]   self-hosted: deviceId в теле
+
+=== Итог: 20 passed, 0 failed ===
