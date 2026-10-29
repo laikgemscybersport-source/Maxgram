@@ -1,0 +1,9 @@
+﻿--- processes ---
+cloudflared pid=21668 start=10/29/2026 01:04:23
+--- files ---
+cf.log size=6011 mtime=10/29/2026 01:00:29
+cf.err size=6011 mtime=10/29/2026 01:04:42
+tunnel.log size=3492 mtime=10/29/2026 00:58:12
+tunnel.err size=743 mtime=10/29/2026 00:58:17
+--- ports ---
+port 3000 not listening

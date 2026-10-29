@@ -1,0 +1,152 @@
+2026-10-28T15:04:23Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+2026-10-28T15:04:23Z INF Requesting new quick Tunnel on trycloudflare.com...
+2026-10-28T15:04:29Z INF +--------------------------------------------------------------------------------------------+
+2026-10-28T15:04:29Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-10-28T15:04:29Z INF |  https://fiscal-conference-symposium-buses.trycloudflare.com                               |
+2026-10-28T15:04:29Z INF +--------------------------------------------------------------------------------------------+
+2026-10-28T15:04:29Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp]
+2026-10-28T15:04:29Z INF Version 2026.10.5 (Checksum db4e4c413612a0916f3e1679d3caaf376f94911952d163028fb726fb2e0516a9)
+2026-10-28T15:04:29Z INF GOOS: windows, GOVersion: go1.27.3, GoArch: amd64
+2026-10-28T15:04:29Z INF Settings: map[ha-connections:1 no-autoupdate:true p:http2 protocol:http2 url:http://localhost:3000]
+2026-10-28T15:04:29Z INF cloudflared will not automatically update on Windows systems.
+2026-10-28T15:04:40Z ERR Failed to fetch features, default to disable error="lookup cfd-features.argotunnel.com: dnsquery: This operation returned because the timeout period expired."
+2026-10-28T15:04:40Z INF Generated Connector ID: 569c3548-41ed-4e44-9e8e-a0a42f5e09e4
+2026-10-28T15:04:40Z INF Initial protocol http2
+2026-10-28T15:04:40Z INF ICMP proxy will use 192.168.0.104 as source for IPv4
+2026-10-28T15:04:40Z INF ICMP proxy will use ::1 in zone Loopback Pseudo-Interface 1 as source for IPv6
+2026-10-28T15:04:40Z INF cloudflared does not support loading the system root certificate pool on Windows. Please use --origin-ca-pool <PATH> to specify the path to the certificate pool
+2026-10-28T15:04:40Z INF ICMP proxy will use 192.168.0.104 as source for IPv4
+2026-10-28T15:04:40Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:04:40Z INF ICMP proxy will use ::1 in zone Loopback Pseudo-Interface 1 as source for IPv6
+2026-10-28T15:04:40Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-10-28T15:04:40Z INF +--------------------------------------------------------------------------------------+
+2026-10-28T15:04:40Z INF |                               CONNECTIVITY PRE-CHECKS                                |
+2026-10-28T15:04:40Z INF +--------------------------------------------------------------------------------------+
+2026-10-28T15:04:40Z INF |  COMPONENT         TARGET                     STATUS  DETAILS                        |
+2026-10-28T15:04:40Z INF |  DNS Resolution    region1.v2.argotunnel.com  PASS    DNS Resolved successfully      |
+2026-10-28T15:04:40Z INF |  DNS Resolution    region2.v2.argotunnel.com  PASS    DNS Resolved successfully      |
+2026-10-28T15:04:40Z INF |  UDP Connectivity  region1.v2.argotunnel.com  PASS    QUIC connection successful     |
+2026-10-28T15:04:40Z INF |  UDP Connectivity  region2.v2.argotunnel.com  PASS    QUIC connection successful     |
+2026-10-28T15:04:40Z INF |  TCP Connectivity  region1.v2.argotunnel.com  PASS    HTTP/2 connection successful   |
+2026-10-28T15:04:40Z INF |  TCP Connectivity  region2.v2.argotunnel.com  PASS    HTTP/2 connection successful   |
+2026-10-28T15:04:40Z INF |  Cloudflare API    api.cloudflare.com:443     PASS    API is reachable               |
+2026-10-28T15:04:40Z INF |                                                                                      |
+2026-10-28T15:04:40Z INF |  SUMMARY: Environment is healthy. cloudflared will use 'http2' as primary protocol.  |
+2026-10-28T15:04:40Z INF +--------------------------------------------------------------------------------------+
+2026-10-28T15:04:40Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region1.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region2.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region1.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region2.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region1.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=region2.v2.argotunnel.com
+2026-10-28T15:04:40Z INF precheck component="Cloudflare API" details="API is reachable" run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc status=pass target=api.cloudflare.com:443
+2026-10-28T15:04:40Z INF precheck complete hard_fail=false run_id=d8dc0bba-6ee1-4a69-ba64-ce34ba7446fc suggested_protocol=http2
+2026-10-28T15:04:42Z INF Registered tunnel connection connIndex=0 connection=ec138d22-404f-460e-a4f2-cbc7d20f09e1 event=0 ip=198.41.200.113 location=hel01 protocol=http2
+2026-10-28T15:07:29Z INF Lost connection with the edge connIndex=0
+2026-10-28T15:07:29Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:07:29Z ERR Serve tunnel error error="connection with edge closed" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:07:29Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:07:30Z ERR Connection terminated error="connection with edge closed" connIndex=0
+2026-10-28T15:07:35Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:07:36Z INF Registered tunnel connection connIndex=0 connection=aa86e28d-cf9c-450b-b33c-bcc44d33f72e event=0 ip=198.41.200.113 location=hel01 protocol=http2
+2026-10-28T15:10:17Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:10:17Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:10:19Z ERR Connection terminated error="Error shutting down control stream: context canceled" connIndex=0
+2026-10-28T15:10:25Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:10:26Z INF Registered tunnel connection connIndex=0 connection=d3e23289-bd74-4621-b9d1-c0f45a6e4fac event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:13:17Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:13:17Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:13:17Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:13:18Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:13:37Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:13:38Z INF Registered tunnel connection connIndex=0 connection=da441a80-eec3-4db4-a433-0ab71e9ec79e event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:16:29Z INF Lost connection with the edge connIndex=0
+2026-10-28T15:16:29Z ERR Serve tunnel error error="connection with edge closed" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:16:29Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:16:29Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:16:29Z ERR Connection terminated error="connection with edge closed" connIndex=0
+2026-10-28T15:16:46Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:16:47Z INF Registered tunnel connection connIndex=0 connection=01f61f43-1a96-482a-a2e5-d03646688bf9 event=0 ip=198.41.200.113 location=hel01 protocol=http2
+2026-10-28T15:17:28Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:17:28Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:17:28Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:17:30Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:17:59Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:18:00Z INF Registered tunnel connection connIndex=0 connection=0b32931e-45b2-476f-876f-40479ccfddc6 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:20:51Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:20:51Z WRN Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:20:51Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:20:51Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:21:08Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:21:10Z INF Registered tunnel connection connIndex=0 connection=3dd4e69d-a77c-475a-8b1b-700680a771bf event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:21:49Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:21:49Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:21:51Z ERR Connection terminated error="Error shutting down control stream: context canceled" connIndex=0
+2026-10-28T15:21:55Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:21:56Z INF Registered tunnel connection connIndex=0 connection=9a532f01-62b1-4f83-89b3-2d542aaaa99e event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:22:41Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:22:41Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:22:41Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:22:42Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:22:51Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:22:53Z INF Registered tunnel connection connIndex=0 connection=061e2392-8686-49f2-8ad1-f1dd4a7d16f0 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:25:44Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:25:44Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:25:44Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:25:45Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:25:55Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:25:56Z INF Registered tunnel connection connIndex=0 connection=7ffe631c-101b-4f5e-8f57-0c5f3e7b205e event=0 ip=198.41.200.113 location=hel01 protocol=http2
+2026-10-28T15:26:36Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:26:36Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:26:36Z ERR Connection terminated error="Error shutting down control stream: context canceled" connIndex=0
+2026-10-28T15:26:58Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:26:59Z INF Registered tunnel connection connIndex=0 connection=f8a0f5ee-601a-4d21-b1ef-fff87433fbe8 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:29:50Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:29:50Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:29:50Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:29:50Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:30:08Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:30:10Z INF Registered tunnel connection connIndex=0 connection=dcccd996-3fa7-4115-8002-1bcd9998a770 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:30:50Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:30:50Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:30:51Z ERR Connection terminated error="Error shutting down control stream: context canceled" connIndex=0
+2026-10-28T15:31:24Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:31:28Z INF Registered tunnel connection connIndex=0 connection=7397eed3-39d2-4c72-be25-0d82f138adc0 event=0 ip=198.41.200.113 location=hel01 protocol=http2
+2026-10-28T15:34:19Z INF Lost connection with the edge connIndex=0
+2026-10-28T15:34:19Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:34:19Z ERR Serve tunnel error error="connection with edge closed" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:34:19Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:34:19Z ERR Connection terminated error="connection with edge closed" connIndex=0
+2026-10-28T15:34:37Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:34:38Z INF Registered tunnel connection connIndex=0 connection=13085a76-20f2-45dc-b6db-f8d015753354 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:35:23Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:35:23Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:35:24Z ERR Connection terminated error="Error shutting down control stream: context canceled" connIndex=0
+2026-10-28T15:35:38Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:35:38Z INF Registered tunnel connection connIndex=0 connection=4f04ee5e-b931-4b9e-a60b-8390b23860a3 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:38:29Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:38:29Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:38:29Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:38:31Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:38:45Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:38:47Z INF Registered tunnel connection connIndex=0 connection=4b6f4f54-9d8c-4848-a527-0e42e1fcf22b event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:39:33Z INF Lost connection with the edge connIndex=0
+2026-10-28T15:39:33Z ERR failed to serve incoming request error="Error shutting down control stream: context canceled"
+2026-10-28T15:39:33Z ERR Serve tunnel error error="connection with edge closed" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:39:33Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:39:34Z ERR Connection terminated error="connection with edge closed" connIndex=0
+2026-10-28T15:39:45Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:39:46Z INF Registered tunnel connection connIndex=0 connection=1f111da3-1835-4156-90ac-5d156ea2187d event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:42:37Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:42:37Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:42:37Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:42:38Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:42:56Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:42:57Z INF Registered tunnel connection connIndex=0 connection=043c4ca3-6871-45b3-afac-1aaa31554c9a event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:45:48Z ERR failed to serve incoming request error="Error shutting down control stream: client disconnected"
+2026-10-28T15:45:48Z ERR Serve tunnel error error="Error shutting down control stream: client disconnected" connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:45:48Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:45:50Z ERR Connection terminated error="Error shutting down control stream: client disconnected" connIndex=0
+2026-10-28T15:46:06Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.113
+2026-10-28T15:46:07Z INF Registered tunnel connection connIndex=0 connection=99c81312-c300-4a29-b983-e807fb1a3309 event=0 ip=198.41.200.113 location=hel02 protocol=http2
+2026-10-28T15:48:09Z INF Initiating graceful shutdown due to signal terminated ...

@@ -1,0 +1,52 @@
+# Blueprint для Render.com: `Render → New → Blueprint` и указать этот репозиторий.
+# Сервер уже читает PORT и PUBLIC_URL, отдаёт client/dist и сам собирает фронт.
+services:
+  - type: web
+    name: maxgram
+    runtime: node
+    plan: free
+    rootDir: messenger
+    buildCommand: npm install && cd client && npm install && npm run build && cd ..
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Замените на фактический домен сервиса после первого деплоя,
+      # иначе OAuth-редирект будет указывать на localhost.
+      - key: PUBLIC_URL
+        value: https://maxgram.onrender.com
+      # Реальные SMS вместо показа кода на экране (иначе публичный сайт уязвим):
+      - key: SMS_PROVIDER
+        value: demo
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+      # Ключи OAuth — только здесь, в config.js их быть не должно:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: YANDEX_CLIENT_ID
+        sync: false
+      - key: YANDEX_CLIENT_SECRET
+        sync: false
+      - key: VK_CLIENT_ID
+        sync: false
+      - key: VK_CLIENT_SECRET
+        sync: false
+      - key: OK_APP_ID
+        sync: false
+      - key: OK_API_SECRET
+        sync: false
+      # Persistent disk: файлы загрузок переживают рестарты и деплои.
+      # Монтируем диск вне исходников и указываем серверу абсолютный путь.
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+    disk:
+      name: maxgram-uploads
+      mountPath: /var/data
+      sizeGB: 1

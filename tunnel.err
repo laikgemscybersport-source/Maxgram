@@ -1,0 +1,19 @@
+node:internal/url:895
+      href = bindingUrl.parse(input, base, true);
+                        ^
+
+TypeError: Invalid URL
+    at new URL (node:internal/url:895:25)
+    at request (node:https:678:32)
+    at Object.get (node:https:733:15)
+    at C:\Users\01\Downloads\Telegram Desktop\messenger\tools\tunnel.js:67:23
+    at new Promise (<anonymous>)
+    at probeTunnel (C:\Users\01\Downloads\Telegram Desktop\messenger\tools\tunnel.js:66:3)
+    at Timeout._onTimeout (C:\Users\01\Downloads\Telegram Desktop\messenger\tools\tunnel.js:108:24)
+    at listOnTimeout (node:internal/timers:685:17)
+    at process.processTimers (node:internal/timers:618:7) {
+  code: 'ERR_INVALID_URL',
+  input: 'null/api/health'
+}
+
+Node.js v24.22.1
