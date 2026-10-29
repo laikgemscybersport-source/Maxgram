@@ -1,13 +1,23 @@
 # Blueprint для Render.com: `Render → New → Blueprint` и указать этот репозиторий.
-# Сервер уже читает PORT и PUBLIC_URL, отдаёт client/dist и сам собирает фронт.
+#
+# ВАЖНО ПРО ОШИБКУ «Publish directory Maxgram.ru does not exist!»
+# Это поле в настройках сервиса (Build & Deploy → Publish directory). Для Node-сервиса
+# оно должно быть ПУСТЫМ: статику раздаёт сам server.js из client/dist. Домен в это
+# поле вносить не нужно — адрес сайта Render выдаёт сам (и он же в PUBLIC_URL).
+#
+# ВАЖНО ПРО СТРУКТУРУ РЕПОЗИТОРИЯ
+# Ниже rootDir: messenger — годится, если в репозитории есть папка messenger/.
+# Если вы заложили её содержимое в корень репозитория — УДАЛИТЕ строку rootDir,
+# иначе Render не найдёт ни package.json, ни папку сборки.
 services:
   - type: web
     name: maxgram
     runtime: node
     plan: free
-    rootDir: messenger
-    buildCommand: npm install && cd client && npm install && npm run build && cd ..
-    startCommand: npm start
+    # rootDir: messenger   # раскомментируйте, если messenger/ лежит внутри репозитория
+    # Публикуемых каталогов нет: Node-приложение отдаёт client/dist само.
+    buildCommand: npm install --omit=dev && cd client && npm install && npm run build && cd ..
+    startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

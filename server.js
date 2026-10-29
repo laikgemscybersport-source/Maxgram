@@ -141,6 +141,70 @@ stories.u4 = [
   { id: uuidv4(), author_id: 'u4', kind: 'text', media: null, caption: 'Кто хочет на созвон в 19:00? 🎧', created_at: hoursAgo(5), expires: Date.now() + 19 * 3600 * 1000, views: ['u1'] },
 ];
 
+/* ==================== СОХРАНЕНИЕ НА ДИСК ====================
+   По умолчанию (веб-деплой) всё живёт в памяти — как раньше.
+   Если задан DATA_FILE (десктоп-приложение передаёт его сам), состояние
+   периодически пишется в JSON и восстанавливается на старте, иначе после
+   закрытия программы переписка исчезала бы.
+   Пишем по таймеру без отслеживания изменений: данные маленькие, а атомарная
+   запись через tmp+rename безопасна на любом диске. */
+
+const DATA_FILE = process.env.DATA_FILE ? path.resolve(process.env.DATA_FILE) : null;
+const PERSIST_MS = Number(process.env.PERSIST_MS || 4000);
+
+const replaceAll = (target, src) => {
+  for (const k of Object.keys(target)) delete target[k];
+  Object.assign(target, src || {});
+};
+
+function persist() {
+  if (!DATA_FILE) return;
+  const snapshot = {
+    version: 1,
+    saved_at: new Date().toISOString(),
+    users, groups, channels, chats, pins, chatSettings, stories,
+    sessions: Array.from(sessions.entries()),
+  };
+  const tmp = DATA_FILE + '.tmp';
+  try {
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(snapshot));
+    fs.renameSync(tmp, DATA_FILE); // rename атомарен — файл не бывает полузаписанным
+  } catch (e) {
+    console.error('Не удалось сохранить данные: ' + e.message);
+  }
+}
+
+if (DATA_FILE && fs.existsSync(DATA_FILE)) {
+  try {
+    const saved = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    replaceAll(users, saved.users);
+    replaceAll(groups, saved.groups);
+    replaceAll(channels, saved.channels);
+    replaceAll(chats, saved.chats);
+    replaceAll(pins, saved.pins);
+    replaceAll(chatSettings, saved.chatSettings);
+    replaceAll(stories, saved.stories);
+    sessions.clear();
+    for (const [token, uid] of saved.sessions || []) sessions.set(token, uid);
+    // просроченные истории убираем сразу, иначе они остались бы «навсегда»
+    const now = Date.now();
+    for (const [uid, list] of Object.entries(stories)) {
+      stories[uid] = (list || []).filter((s) => s.expires > now);
+      if (!stories[uid].length) delete stories[uid];
+    }
+    console.log('Данные восстановлены из ' + DATA_FILE);
+  } catch (e) {
+    console.error('Файл данных повреждён (' + e.message + '), стартуем с демо-данными');
+  }
+}
+
+if (DATA_FILE) {
+  setInterval(persist, PERSIST_MS).unref();
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, persist);
+  process.on('exit', persist);
+}
+
 /* ==================== ХЕЛПЕРЫ ==================== */
 
 const pairKey = (a, b) => 'p:' + [a, b].sort().join(',');
@@ -1708,6 +1772,11 @@ app.get(/^(?!\/api|\/ws|\/uploads|\/auth).*/, (_req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log('\n  MAXgram запущен: http://localhost:' + PORT);
+  // PORT может быть 0 (Electron просит свободный порт) — берём реальный из сокета
+  const real = server.address().port;
+  console.log('\n  MAXgram запущен: http://localhost:' + real);
   console.log('  SMS-провайдер: ' + config.sms.provider + ' (demo = код показывается на экране)\n');
 });
+
+// Для десктоп-обёртки (electron/main.js), которая подключает сервер как модуль
+module.exports = { app, server };
