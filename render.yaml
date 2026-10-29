@@ -27,14 +27,69 @@ services:
       - key: PUBLIC_URL
         value: https://maxgram.onrender.com
       # Реальные SMS вместо показа кода на экране (иначе публичный сайт уязвим):
+      # demo | smsgate | http | smsru | smsaero | twilio. Значение по умолчанию — demo, поменяйте его
+      # и заполните ключи выбранного шлюза (значения скрыты: sync: false).
       - key: SMS_PROVIDER
         value: demo
+      # Телефон с SIM через облако SMS Gateway for Android — рекомендованный способ для
+      # хостинга: телефон сам опрашивает облако, поэтому ему не нужен белый IP или туннель.
+      # Ключ: https://app.sms-gateway.app → Settings / API (показывается один раз).
+      - key: SMS_GATE_KEY
+        sync: false
+      - key: SMS_GATE_URL
+        value: https://app.sms-gateway.app/api/v1
+      # Альтернатива ключу для self-hosted сервера шлюза (SMS_GATE_URL=.../3rdparty/v1)
+      - key: SMS_GATE_USERNAME
+        sync: false
+      - key: SMS_GATE_PASSWORD
+        sync: false
+      # Если к аккаунту привязано несколько телефонов — id нужного
+      - key: SMS_GATE_DEVICE
+        sync: false
+      # Свой шлюз на телефоне с SIM (бесплатно). На хостинге телефон должен быть доступен
+      # из интернета: проще всего через Tailscale, адрес вида http://100.x.y.z:8080.
+      - key: SMS_HTTP_URL
+        sync: false
+      - key: SMS_HTTP_METHOD
+        value: POST
+      - key: SMS_HTTP_FORMAT
+        value: form
+      - key: SMS_HTTP_PHONE_FIELD
+        value: to
+      - key: SMS_HTTP_TEXT_FIELD
+        value: message
+      - key: SMS_HTTP_TOKEN
+        sync: false
+      - key: SMS_HTTP_EXPECT
+        sync: false
+      # SMS.ru: https://sms.ru → Настройки API
+      - key: SMSRU_API_ID
+        sync: false
+      - key: SMSRU_API_KEY
+        sync: false
+      - key: SMSRU_FROM
+        sync: false
+      # SMS Aero: https://smsaero.ru → Интеграция / API
+      - key: SMSAERO_EMAIL
+        sync: false
+      - key: SMSAERO_API_KEY
+        sync: false
+      - key: SMSAERO_FROM
+        sync: false
+      # Twilio: https://console.twilio.com
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: TWILIO_FROM
         sync: false
+      - key: TWILIO_SERVICE_SID
+        sync: false
+      # Лимиты выдачи кодов за час (защита баланса шлюза от ботов):
+      - key: SMS_LIMIT_PHONE
+        value: '5'
+      - key: SMS_LIMIT_IP
+        value: '20'
       # Ключи OAuth — только здесь, в config.js их быть не должно:
       - key: GOOGLE_CLIENT_ID
         sync: false

@@ -3,6 +3,7 @@ client/node_modules/
 client/dist/
 desktop/
 uploads/
+secrets.js
 *.log
 *.err
 tunnel.log

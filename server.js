@@ -12,6 +12,10 @@ const config = require('./config');
 const app = express();
 const server = http.createServer(app);
 
+// Сервер почти всегда стоит за прокси (Nginx, Render, Cloudflare-туннель, десктоп).
+// Без trust proxy req.ip отдаёт адрес прокси, а req.secure всегда false —
+// из-за этого OAuth-редирект и rate-limit по IP работают неверно.
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
@@ -633,57 +637,310 @@ function generateCode() {
   return String(crypto.randomInt(10000, 99999));
 }
 
-async function deliverSms(phone, code) {
-  const { provider, twilio } = config.sms;
-  if (provider === 'twilio' && twilio.accountSid && twilio.authToken) {
-    // Реальная отправка через Twilio REST API (без SDK — только https).
-    const https = require('https');
-    const target = `/2010-04-01/Accounts/${twilio.accountSid}/Messages.json`;
-    const body = new URLSearchParams({
-      To: phone,
-      From: twilio.serviceSid ? twilio.serviceSid : twilio.from,
-      Body: `Код подтверждения MAXgram: ${code}. Не передавайте его никому.`,
-    });
-    if (twilio.serviceSid) body.set('MessagingServiceSid', twilio.serviceSid);
+/* ---- Реальная доставка SMS ----
+   Каждый шлюз отвечает одинаковым объектом { ok, error?, balance? },
+   чтобы вызывающий код не зависел от конкретного провайдера. */
 
-    return new Promise((resolve) => {
-      const basic = Buffer.from(`${twilio.accountSid}:${twilio.authToken}`).toString('base64');
-      const rq = https.request(
-        { host: 'api.twilio.com', path: target, method: 'POST', headers: {
-            Authorization: 'Basic ' + basic,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Content-Length': Buffer.byteLength(body),
-          } },
-        (r) => {
-          let d = '';
-          r.on('data', (c) => (d += c));
-          r.on('end', () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, raw: d }));
-        }
-      );
-      rq.on('error', (e) => resolve({ ok: false, error: e.message }));
-      rq.write(body.toString());
-      rq.end();
-    });
+const SMS_TEXT = (code) => `Код подтверждения MAXgram: ${code}. Не передавайте его никому.`;
+
+// POST form-urlencoded с разбором ошибок провайдера
+async function postUrlForm(url, fields, headers = {}) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
+    body: new URLSearchParams(fields).toString(),
+  });
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* не JSON — вернём текст */ }
+  return { status: res.status, json, text };
+}
+
+// SMS.RU: статус «OK» приходит даже при HTTP 200 с ошибкой внутри — смотрим status_code
+async function sendViaSmsRu(phone, code) {
+  const { api_id, api_key, from } = config.sms.smsru;
+  const fields = {
+    api_id,
+    to: phone.replace('+', ''),
+    msg: SMS_TEXT(code),
+    json: '1',
+  };
+  if (api_key) fields.api_key = api_key;   // кабинет выдаёт и id, и ключ — передаём оба
+  if (from) fields.from = from;
+
+  const { status, json, text } = await postUrlForm('https://sms.ru/sms/send', fields);
+  if (!json) return { ok: false, error: `sms.ru ответил HTTP ${status}: ${text.slice(0, 120)}` };
+  if (json.status !== 'OK') {
+    return { ok: false, error: `sms.ru: ${json.status_text || 'код ' + json.status_code} (код ${json.status_code})`, balance: json.balance };
   }
-  return { ok: true, demo: true };
+  const perPhone = Object.values(json.sms || {})[0] || {};
+  if (perPhone.status !== 'OK') {
+    return { ok: false, error: `sms.ru: ${perPhone.status_text || 'код ' + perPhone.status_code}`, balance: json.balance };
+  }
+  return { ok: true, balance: json.balance };
+}
+
+// SMS Aero: авторизация по email + apiSign, успешный ответ — success: true
+async function sendViaSmsAero(phone, code) {
+  const { email, api_key, from } = config.sms.smsaero;
+  const { status, json, text } = await postUrlForm('https://gate.smsaero.ru/v2/sms/send', {
+    email,
+    apiSign: api_key,
+    number: phone.replace('+', ''),
+    text: SMS_TEXT(code),
+    from,
+  });
+  if (!json) return { ok: false, error: `smsaero ответил HTTP ${status}: ${text.slice(0, 120)}` };
+  if (!json.success) return { ok: false, error: `SMS Aero: ${json.message || 'код ' + json.statusCode}` };
+  return { ok: true };
+}
+
+/* ---- Собственный SMS-шлюз на телефоне с SIM (SMS_PROVIDER=http) ----
+   Приложение-шлюз на Android поднимает HTTP-сервер в локальной сети; мы присылаем
+   на него номер и текст, а он отправляет SMS своей SIM. Названия полей, метод и
+   формат настраиваются в config (SMS_HTTP_*), потому что у разных приложений они
+   разные. Адрес задаёт администратор в secrets.js — пользователь вводит только номер. */
+async function sendViaHttp(phone, code) {
+  const g = config.sms.http;
+  const fields = { [g.phone_field]: phone, [g.text_field]: SMS_TEXT(code) };
+  if (g.from) fields.from = g.from;
+  if (g.extra) {
+    try { Object.assign(fields, JSON.parse(g.extra)); }
+    catch { return { ok: false, error: 'SMS_HTTP_EXTRA — не корректный JSON' }; }
+  }
+
+  const headers = {};
+  if (g.token) headers.Authorization = 'Bearer ' + g.token;
+
+  let url = g.url;
+  let body;
+  if (g.method === 'GET') {
+    url += (url.includes('?') ? '&' : '?') + new URLSearchParams(fields).toString();
+  } else if (g.format === 'json') {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(fields);
+  } else {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = new URLSearchParams(fields).toString();
+  }
+
+  const res = await fetch(url, { method: g.method, headers, body });
+  const text = await res.text();
+  if (!res.ok) return { ok: false, error: `шлюз ответил HTTP ${res.status}: ${text.slice(0, 120)}` };
+  // Некоторые шлюзы всегда отвечают 200 и пишут результат текстом
+  if (g.expect && !text.includes(g.expect)) {
+    return { ok: false, error: `в ответе шлюза нет «${g.expect}»: ${text.slice(0, 120)}` };
+  }
+  return { ok: true };
+}
+
+/* ---- SMS Gateway for Android (sms-gateway.app) ----
+   Приложение на телефоне с SIM держит постоянный канал с облаком шлюза, поэтому
+   телефон не обязан быть доступен из интернета: сервер пишет в API, облако ставит
+   задачу в очередь, телефон забирает её при следующем опросе (~10 с) и отправляет SMS.
+   Авторизация: Bearer-ключ из дашборда (Settings / API) либо JWT из логина/пароля
+   для self-hosted сервера. */
+let smsgateToken = { value: '', expiresAt: 0 };
+
+async function smsgateAuthHeader() {
+  const g = config.sms.smsgate;
+  if (g.key) return 'Bearer ' + g.key;
+
+  // Self-hosted: меняем логин/пароль на короткоживущий JWT и переиспользуем до истечения
+  if (smsgateToken.value && smsgateToken.expiresAt - Date.now() > 60 * 1000) {
+    return 'Bearer ' + smsgateToken.value;
+  }
+  const basic = Buffer.from(`${g.username}:${g.password}`).toString('base64');
+  const res = await fetch(`${g.base_url}/auth/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Basic ' + basic,
+    },
+    body: JSON.stringify({ ttl: 3600, scopes: ['messages:send'] }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    throw new Error('не удалось получить токен: ' + (data.error || data.message || 'HTTP ' + res.status));
+  }
+  smsgateToken = {
+    value: data.access_token,
+    expiresAt: data.expires_at ? Date.parse(data.expires_at) : Date.now() + 3600 * 1000,
+  };
+  return 'Bearer ' + smsgateToken.value;
+}
+
+/* Формат тела зависит от типа эндпоинта: облако из дашборда (…/api/v1) принимает
+   плоский {"to","text"}, self-hosted сервер (…/3rdparty/v1) — вложенный
+   {"phoneNumbers":[…],"textMessage":{…}}. Отправим не тот — 400 missing_parameter. */
+function smsgatePayload(g, phone, text) {
+  const selfHosted = /\/3rdparty\//.test(g.base_url);
+  if (selfHosted) {
+    const payload = { phoneNumbers: [phone], textMessage: { text } };
+    if (g.device_id) payload.deviceId = g.device_id;
+    return payload;
+  }
+  const payload = { to: phone, text };
+  if (g.device_id) payload.deviceId = g.device_id;
+  return payload;
+}
+
+async function sendViaSmsgate(phone, code) {
+  const g = config.sms.smsgate;
+  const payload = smsgatePayload(g, phone, SMS_TEXT(code));
+
+  const res = await fetch(`${g.base_url}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: await smsgateAuthHeader() },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* не JSON */ }
+
+  // Успех — 2xx и идентификатор сообщения; у 4xx читаем описание ошибки.
+  // Облако отдаёт error объектом {"error":{"message":…}}, self-hosted — строкой.
+  if (!res.ok) {
+    const err = json && json.error;
+    const why = err && (typeof err === 'string' ? err : err.message || err.code)
+      || json && (json.message || json.detail);
+    return { ok: false, error: `sms-gateway: ${why || 'HTTP ' + res.status}` };
+  }
+  if (!json) return { ok: false, error: `sms-gateway ответил не JSON: ${text.slice(0, 120)}` };
+  // Идентификатор лежит по-разному: self-hosted — {id}, облако — {accepted, messages:[{id}]}
+  if (json.id) return { ok: true };
+  const first = Array.isArray(json.messages) && json.messages[0];
+  if (first && (first.id || first.status)) return { ok: true };
+  if (json.accepted >= 1) return { ok: true };
+  return { ok: false, error: 'sms-gateway: 2xx без идентификатора сообщения' };
+}
+
+async function sendViaTwilio(phone, code) {
+  const { accountSid, authToken, from, serviceSid } = config.sms.twilio;
+  const basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+  const body = { To: phone, Body: SMS_TEXT(code) };
+  if (serviceSid) body.MessagingServiceSid = serviceSid; else body.From = from;
+
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + basic, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body).toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: `Twilio: ${data.message || 'HTTP ' + res.status}` };
+  return { ok: true };
+}
+
+// Есть ли у выбранного провайдера ключи и полна ли конфигурация
+function smsGateway() {
+  const { provider, http, smsgate, smsru, smsaero, twilio } = config.sms;
+  if (provider === 'http') {
+    return { name: 'свой HTTP-шлюз', ready: !!http.url, missing: http.url ? [] : ['SMS_HTTP_URL'] };
+  }
+  if (provider === 'smsgate') {
+    const missing = [];
+    if (!smsgate.key && !(smsgate.username && smsgate.password)) missing.push('SMS_GATE_KEY');
+    return { name: 'SMS Gateway (Android)', ready: missing.length === 0, missing };
+  }
+  if (provider === 'smsru') {
+    return { name: 'sms.ru', ready: !!smsru.api_id, missing: smsru.api_id ? [] : ['SMSRU_API_ID'] };
+  }
+  if (provider === 'smsaero') {
+    const missing = [];
+    if (!smsaero.email) missing.push('SMSAERO_EMAIL');
+    if (!smsaero.api_key) missing.push('SMSAERO_API_KEY');
+    return { name: 'SMS Aero', ready: missing.length === 0, missing };
+  }
+  if (provider === 'twilio') {
+    const missing = [];
+    if (!twilio.accountSid) missing.push('TWILIO_ACCOUNT_SID');
+    if (!twilio.authToken) missing.push('TWILIO_AUTH_TOKEN');
+    if (!twilio.from && !twilio.serviceSid) missing.push('TWILIO_FROM');
+    return { name: 'Twilio', ready: missing.length === 0, missing };
+  }
+  return { name: 'demo', ready: true, missing: [] };
+}
+
+async function deliverSms(phone, code) {
+  const { provider } = config.sms;
+  const gw = smsGateway();
+  if (provider === 'demo' || !gw.ready) return { ok: true, demo: true };
+
+  try {
+    if (provider === 'http') return await sendViaHttp(phone, code);
+    if (provider === 'smsgate') return await sendViaSmsgate(phone, code);
+    if (provider === 'smsru') return await sendViaSmsRu(phone, code);
+    if (provider === 'smsaero') return await sendViaSmsAero(phone, code);
+    if (provider === 'twilio') return await sendViaTwilio(phone, code);
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+  return { ok: false, error: 'Неизвестный SMS-провайдер: ' + provider };
+}
+
+/* ---- Ограничение выдачи кодов ----
+   Реальная SMS стоит денег, а запрос кода открыт всем. Без лимитов бот за вечер
+   обнуляет баланс шлюза, поэтому считаем обращения к окну в один час.
+   В демо-режиме SMS никуда не уходит и денег не стоит — лимиты отключены,
+   иначе они мешали бы и разработке, и интеграционным тестам. */
+
+const HOUR = 3600 * 1000;
+const hitsByPhone = new Map();
+const hitsByIp = new Map();
+
+function allowSend(bucket, key, limit) {
+  if (config.sms.provider === 'demo' || !key || limit <= 0) return true;
+  const now = Date.now();
+  const list = (bucket.get(key) || []).filter((t) => now - t < HOUR);
+  if (list.length >= limit) {
+    bucket.set(key, list);
+    return false;
+  }
+  list.push(now);
+  bucket.set(key, list);
+  return true;
 }
 
 app.post('/api/auth/send-code', async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   if (!phone) return res.status(400).json({ error: 'Введите номер в формате +7 999 123-45-67' });
 
+  const gw = smsGateway();
+  if (config.sms.provider !== 'demo' && !gw.ready) {
+    return res.status(503).json({
+      error: `SMS через ${gw.name} не настроены: не хватает ${gw.missing.join(', ')}. Задайте их в messenger/secrets.js или переменными окружения (подробности: npm run doctor)`,
+    });
+  }
+
+  const ip = req.ip || req.socket.remoteAddress || '';
+  if (!allowSend(hitsByPhone, phone, config.rateLimit.perPhoneHour)) {
+    return res.status(429).json({ error: 'Вы уже запрашивали коды несколько раз. Попробуйте через час.' });
+  }
+  if (!allowSend(hitsByIp, ip, config.rateLimit.perIpHour)) {
+    return res.status(429).json({ error: 'Слишком много запросов кодов с этого адреса. Повторите позже.' });
+  }
+
   const code = generateCode();
   otpCodes.set(phone, { code, expires: Date.now() + CODE_TTL, attempts: 0 });
 
   const result = await deliverSms(phone, code);
+  if (!result.ok && !result.demo) {
+    otpCodes.delete(phone);
+    console.error(`SMS на ${phone} не отправлены: ${result.error}`);
+    return res.status(502).json({ error: 'Не удалось отправить SMS. ' + (result.error || '') });
+  }
+
+  // Баланс шлюза виден в логах: удобно заметить, что деньги кончились
+  if (result.balance !== undefined) console.log(`SMS отправлена на ${phone}, баланс шлюза: ${result.balance}`);
 
   // В демо-режиме код возвращается клиенту и показывается на экране.
+  // При реальном шлюзе он никогда не уходит в ответ.
   res.json({
     ok: true,
     phone,
     sent: result.ok,
-    demo: !!result.demo || config.sms.provider !== 'twilio',
-    demo_code: config.sms.provider === 'demo' ? code : undefined,
+    demo: !!result.demo,
+    demo_code: result.demo ? code : undefined,
     ttl_sec: CODE_TTL / 1000,
   });
 });
@@ -823,7 +1080,7 @@ const OAUTH = {
     token: 'https://connect.ok.ru/oauth/access_token',
     scope: 'standard',
     userinfo: 'https://api.ok.ru/fb.do',
-    configured: () => !!(config.oauth.ok.client_id && config.oauth.ok.client_secret),
+    configured: () => !!(config.oauth.ok.client_id && config.oauth.ok.api_secret),
   },
 };
 
@@ -899,23 +1156,33 @@ async function exchangeOAuthCode(provider, code, redirectUri) {
     };
   }
 
-  // OK требует подпись запроса: md5(api_secret + параметры)
+  /* OK требует подписи каждого запроса. По документации apiok.ru:
+     session_secret_key = md5(access_token + application_secret_key),
+     затем sig = md5(отсортированные key=value + session_secret_key).
+     access_token и format в подпись не входят, параметр называется sig,
+     а публичный ключ — application_key (не application_id). */
   const tok = await postForm(meta.token, {
-    code, client_id: p.client_id, client_secret: p.client_secret,
+    code, client_id: p.client_id, client_secret: p.api_secret,
     redirect_uri: redirectUri, grant_type: 'authorization_code',
   });
-  const fields = 'uid,first_name,last_name,pic_150';
   const params = {
     method: 'users.getCurrentUser',
-    access_token: tok.access_token,
-    application_id: p.client_id,
-    fields,
+    application_key: p.client_id,
+    fields: 'uid,first_name,last_name,pic_150',
     format: 'json',
-    reference_id: '',
+    access_token: tok.access_token,
   };
-  const toSign = Object.keys(params).filter((k) => k !== 'format').sort().map((k) => k + '=' + params[k]).join('');
-  params.sign = crypto.createHash('md5').update((p.api_secret || p.client_secret) + toSign).digest('hex');
+  const sessionSecret = crypto.createHash('md5').update(tok.access_token + p.api_secret).digest('hex');
+  const toSign = Object.keys(params)
+    .filter((k) => k !== 'access_token' && k !== 'format' && params[k] !== '')
+    .sort()
+    .map((k) => k + '=' + params[k])
+    .join('');
+  params.sig = crypto.createHash('md5').update(toSign + sessionSecret).digest('hex');
   const info = await getJson(meta.userinfo + '?' + new URLSearchParams(params));
+  if (info.error_code || info.error) {
+    throw new Error(`OK: ${info.error_msg || info.error_code || JSON.stringify(info).slice(0, 160)}`);
+  }
   return {
     pid: String(info.uid),
     name: [info.first_name, info.last_name].filter(Boolean).join(' ') || 'Пользователь OK',
@@ -963,6 +1230,7 @@ function findOAuthUser(provider, prof) {
 }
 
 app.get('/api/health', (_req, res) => {
+  const gw = smsGateway();
   res.json({
     ok: true,
     name: 'MAXgram',
@@ -973,6 +1241,7 @@ app.get('/api/health', (_req, res) => {
     channels: Object.keys(channels).length,
     groups: Object.keys(groups).length,
     sms_provider: config.sms.provider,
+    sms_ready: gw.ready,
   });
 });
 
@@ -981,8 +1250,31 @@ app.get('/api/auth/providers', (_req, res) => {
   for (const [id, cfg] of Object.entries(OAUTH)) {
     out[id] = { label: cfg.label, configured: cfg.configured() };
   }
-  res.json({ providers: out, sms_provider: config.sms.provider });
+  const gw = smsGateway();
+  res.json({
+    providers: out,
+    sms_provider: config.sms.provider,
+    sms_ready: gw.ready,
+    // Реальный шлюз выбран, но ключей нет — фронт честно скажет об этом вместо
+    // расплывчатого «SMS не отправлены»
+    sms_name: gw.name,
+    sms_missing: gw.missing,
+  });
 });
+
+// Адрес этого сервера глазами браузера. PUBLIC_URL задаёт его жёстко (продакшен),
+// иначе берём из заголовков прокси — тогда один процесс корректно работает и на
+// localhost, и на trycloudflare-туннеле, и на Render без перезапуска.
+function publicOrigin(req) {
+  if (!config.publicUrlExplicit) {
+    const host = req.get('x-forwarded-host') || req.get('host');
+    if (host) {
+      const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+      return proto + '://' + host.split(',')[0].trim();
+    }
+  }
+  return config.publicUrl;
+}
 
 app.get('/api/auth/:provider/start', (req, res) => {
   const id = req.params.provider;
@@ -990,12 +1282,12 @@ app.get('/api/auth/:provider/start', (req, res) => {
   if (!provider) return res.status(404).json({ error: 'Неизвестный провайдер' });
   if (!provider.configured()) {
     return res.status(501).json({
-      error: `${provider.label} не настроен: добавьте client_id и client_secret в messenger/config.js (или переменные окружения)`,
+      error: `${provider.label} не настроен: впишите client_id и client_secret в messenger/secrets.js (образец — secrets.example.js) или задайте переменными окружения. Проверка: npm run doctor`,
     });
   }
 
   const state = crypto.randomBytes(12).toString('hex');
-  const redirect = `${config.publicUrl}/auth/${id}/callback`;
+  const redirect = `${publicOrigin(req)}/auth/${id}/callback`;
   oauthStates.set(state, { provider: id, expires: Date.now() + CODE_TTL, redirect });
 
   const p = config.oauth[id];
@@ -1007,7 +1299,8 @@ app.get('/api/auth/:provider/start', (req, res) => {
   } else if (id === 'vk') {
     url = `${provider.authorize}?client_id=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=${provider.scope}&state=${state}&v=5.131`;
   } else {
-    url = `${provider.authorize}?application_id=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=${state}&layout=w`;
+    // У ОК публичный ключ в параметре application_key
+    url = `${provider.authorize}?application_key=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=${state}&layout=w`;
   }
   res.json({ url, redirect_uri: redirect });
 });
@@ -1774,8 +2067,15 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   // PORT может быть 0 (Electron просит свободный порт) — берём реальный из сокета
   const real = server.address().port;
+  const gw = smsGateway();
+  // При реальном шлюзе писать про demo вредно: админ ищет глазами именно эту
+  // строку, чтобы понять, подхватились ли ключи из secrets.js.
+  const smsLine = config.sms.provider === 'demo'
+    ? 'demo (код показывается на экране)'
+    : `${config.sms.provider} — ${gw.name}: ` +
+      (gw.ready ? 'ключи заданы' : 'НЕ хватает ' + gw.missing.join(', ') + ' (подробности: npm run doctor)');
   console.log('\n  MAXgram запущен: http://localhost:' + real);
-  console.log('  SMS-провайдер: ' + config.sms.provider + ' (demo = код показывается на экране)\n');
+  console.log('  SMS-провайдер: ' + smsLine + '\n');
 });
 
 // Для десктоп-обёртки (electron/main.js), которая подключает сервер как модуль

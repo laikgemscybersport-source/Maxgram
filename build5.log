@@ -1,0 +1,9 @@
+  • electron-builder  version=26.18.0 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • author is missed in the package.json  appPackageFile=C:\Users\01\Downloads\Telegram Desktop\messenger\package.json
+  • executing @electron/rebuild  electronVersion=45.1.0 arch=x64 buildFromSource=false workspaceRoot=C:\Users\01\Downloads\Telegram Desktop\messenger projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=45.1.0 appOutDir=desktop\win-unpacked
+  • downloaded      label=electron progress=100%
+  ⨯ EBUSY: resource busy or locked, unlink 'C:\Users\01\Downloads\Telegram Desktop\messenger\desktop\win-unpacked\resources\app.asar'  failedTask=build stackTrace=Error: EBUSY: resource busy or locked, unlink 'C:\Users\01\Downloads\Telegram Desktop\messenger\desktop\win-unpacked\resources\app.asar'

@@ -1,71 +1,43 @@
 {
-  "name": "maxgram",
-  "version": "1.0.0",
-  "description": "Telegram-style messenger",
-  "main": "electron/main.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "test": "node test.js",
-    "client": "cd client && npm run dev",
-    "build:client": "cd client && npm install && npm run build",
-    "icon": "node tools/gen-icon.js",
-    "desktop": "electron .",
-    "dist": "npm run build:client && electron-builder --win"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "multer": "^2.5.0",
-    "uuid": "^9.0.0",
-    "ws": "^8.16.0"
-  },
-  "engines": {
-    "node": ">=18"
-  },
+  "name": "vary",
+  "description": "Manipulate the HTTP Vary header",
+  "version": "1.1.2",
+  "author": "Douglas Christopher Wilson <doug@somethingdoug.com>",
+  "license": "MIT",
+  "keywords": [
+    "http",
+    "res",
+    "vary"
+  ],
+  "repository": "jshttp/vary",
   "devDependencies": {
-    "electron": "^45.1.0",
-    "electron-builder": "^26.0.12"
+    "beautify-benchmark": "0.2.4",
+    "benchmark": "2.1.4",
+    "eslint": "3.19.0",
+    "eslint-config-standard": "10.2.1",
+    "eslint-plugin-import": "2.7.0",
+    "eslint-plugin-markdown": "1.0.0-beta.6",
+    "eslint-plugin-node": "5.1.1",
+    "eslint-plugin-promise": "3.5.0",
+    "eslint-plugin-standard": "3.0.1",
+    "istanbul": "0.4.5",
+    "mocha": "2.5.3",
+    "supertest": "1.1.0"
   },
-  "build": {
-    "appId": "ru.maxgram.app",
-    "productName": "MAXgram",
-    "directories": {
-      "output": "desktop",
-      "buildResources": "electron/build"
-    },
-    "files": [
-      "server.js",
-      "config.js",
-      "package.json",
-      "electron/**/*",
-      "client/dist/**/*",
-      "!electron/build/*.png",
-      "!**/{.git,.github,docs,examples,test,tests}/**"
-    ],
-    "asar": true,
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "electron/build/icon.ico",
-      "artifactName": "MAXgram-${version}-${arch}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "MAXgram",
-      "artifactName": "MAXgram-Setup-${version}.${ext}"
-    }
+  "files": [
+    "HISTORY.md",
+    "LICENSE",
+    "README.md",
+    "index.js"
+  ],
+  "engines": {
+    "node": ">= 0.8"
+  },
+  "scripts": {
+    "bench": "node benchmark/index.js",
+    "lint": "eslint --plugin markdown --ext js,md .",
+    "test": "mocha --reporter spec --bail --check-leaks test/",
+    "test-cov": "istanbul cover node_modules/mocha/bin/_mocha -- --reporter dot --check-leaks test/",
+    "test-travis": "istanbul cover node_modules/mocha/bin/_mocha --report lcovonly -- --reporter spec --check-leaks test/"
   }
 }

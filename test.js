@@ -69,6 +69,16 @@ async function login(phone, profile) {
 (async () => {
   console.log('\n=== MAXgram: интеграционные тесты ===\n');
 
+  // Тесты логинятся через demo_code на фиктивных номерах, поэтому сервер обязан
+  // работать в demo-режиме. Иначе send-code отправит настоящие SMS на эти номера.
+  const boot = await req('/api/auth/providers');
+  if (boot.body?.sms_provider && boot.body.sms_provider !== 'demo') {
+    console.error(`ОСТАНОВКА: сервер запущен с SMS_PROVIDER=${boot.body.sms_provider}.`);
+    console.error('Тесты требуют demo-режим (иначе send-code шлёт реальные SMS на тестовые номера).');
+    console.error('Запустите сервер без реального провайдера: set SMS_PROVIDER=demo && node server.js');
+    process.exit(1);
+  }
+
   // 1. Гость без токена не получает данные
   const anon = await req('/api/users');
   ok('GET /api/users без токена -> 401', anon.status === 401);
