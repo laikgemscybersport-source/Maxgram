@@ -1,0 +1,19 @@
+{
+  "appId": "com.maxgram.app",
+  "appName": "MAXgram",
+  "webDir": "dist",
+  "backgroundColor": "#ffffff",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "http"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+const fs = require('fs')
+const d = fs.readFileSync(process.argv[2], 'utf8')
+const lines = d.split(/\r?\n/)
+const fails = lines.filter((l) => /FAIL|✗|not ok/i.test(l))
+console.log(fails.slice(0, 60).join('\n'))
+console.log('---')
+console.log(lines.filter((l) => /passed|failed|TOTAL|===/i.test(l)).slice(-25).join('\n'))

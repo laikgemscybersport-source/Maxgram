@@ -1,0 +1,10 @@
+// Достаёт electron/main.js из собранного asar, чтобы проверить, какая версия попала в сборку
+const path = require('path')
+const asar = require('@electron/asar')
+const asarPath = path.join(__dirname, '..', 'desktop', 'win-unpacked', 'resources', 'app.asar')
+const src = asar.extractFile(asarPath, 'electron/main.js').toString('utf8')
+console.log('len=' + src.length)
+console.log('has temp log: ' + /maxgram-desktop\.log/.test(src))
+console.log('has tmpdir: ' + /tmpdir/.test(src))
+console.log('--- first 700 chars ---')
+console.log(src.slice(0, 700))

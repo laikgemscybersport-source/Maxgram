@@ -1,0 +1,10 @@
+// Показывает содержимое asar-архива собранного приложения
+const path = require('path')
+const asarPath = path.join(__dirname, '..', 'desktop', 'win-unpacked', 'resources', 'app.asar')
+const asar = require('@electron/asar')
+const list = asar.listPackage(asarPath)
+console.log('entries:', list.length)
+console.log('--- first 20 ---')
+list.slice(0, 20).forEach((e) => console.log(JSON.stringify(e)))
+console.log('--- grep main/server/config/html ---')
+list.filter((e) => /main\.js|server\.js|config\.js|index\.html/.test(e)).slice(0, 20).forEach((e) => console.log(JSON.stringify(e)))

@@ -1,0 +1,16 @@
+/* Находит в JSX использование Icon*, отсутствующее в импортах этого файла */
+const fs = require('fs')
+const files = process.argv.slice(2)
+const iconsFile = fs.readFileSync('client/src/components/Icons.jsx', 'utf8')
+const allIcons = new Set((iconsFile.match(/export const (Icon\w+)/g) || []).map((s) => s.split(' ')[2]))
+files.forEach((f) => {
+  const src = fs.readFileSync(f, 'utf8')
+  const from = src.match(/import\s*\{([^}]*)\}\s*from\s*'[^']*Icons\.jsx'/s)
+  const imported = new Set(from ? from[1].split(',').map((s) => s.trim()).filter(Boolean) : [])
+  const used = new Set((src.match(/\bIcon[A-Z]\w*/g) || []))
+  const missing = [...used].filter((u) => !imported.has(u) && allIcons.has(u))
+  const unknown = [...used].filter((u) => !allIcons.has(u) && !imported.has(u))
+  console.log(f + ': imported=' + imported.size + ' used=' + used.size)
+  if (missing.length) console.log('  MISSING IMPORT: ' + missing.join(', '))
+  if (unknown.length) console.log('  NOT AN ICON?: ' + unknown.join(', '))
+})
