@@ -56,7 +56,7 @@ export async function recordCircle({ onStop, onError, maxSec = 60 }) {
   let stream
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 480, height: 480, facingMode: 'user' },
+      video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: 'user' },
       audio: true,
     })
   } catch (e) {

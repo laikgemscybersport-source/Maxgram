@@ -137,9 +137,14 @@ const startServer = () =>
   })
 
 async function createWindow() {
-  // Микрофон и камера нужны для звонков и видеокружков
+  // Микрофон и камера нужны для звонков и видеокружков.
+  // Check-спрашивает «разрешено ли вообще», request — «разрешить этот вызов».
+  // В Electron 45 без check-обработчика getUserMedia блокируется до того, как
+  // дойдёт до request-обработчика, и камера в десктопе просто не открывается.
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) =>
+    ['media', 'mediaKeySystem', 'audioCapture', 'videoCapture', 'notifications'].includes(permission))
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
-    cb(['media', 'mediaKeySystem', 'notifications'].includes(permission))
+    cb(['media', 'mediaKeySystem', 'audioCapture', 'videoCapture', 'notifications'].includes(permission))
   })
 
   win = new BrowserWindow({

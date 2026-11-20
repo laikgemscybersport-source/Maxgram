@@ -32,6 +32,21 @@ export function initials(name) {
   return parts[0][0] + parts[1][0]
 }
 
+// Личный префикс («★», «👑», «[VIP]») выводится перед именем везде, где оно
+// показано: так собеседник не выделяется только в одном месте списка.
+export function displayNameOf(u) {
+  if (!u) return ''
+  return u.prefix ? `${u.prefix} ${u.name}` : u.name || ''
+}
+
+// Короткое имя для тесных мест (круг историй): префикс сохраняется, из имени
+// берётся первое слово.
+export function shortNameOf(u) {
+  if (!u) return ''
+  const first = (u.name || '').split(' ')[0]
+  return u.prefix ? `${u.prefix} ${first}` : first
+}
+
 export function timeOf(iso) {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
@@ -57,11 +72,14 @@ export function listTime(iso) {
 /* ==================== АВАТАР ==================== */
 
 export function Avatar({ user, size = '', online, ring = true }) {
+  // Точка «в сети» зависит только от online. Раньше она была завязана ещё и на
+  // ring, а все вызовы в приложениях идут с ring={false} — поэтому зелёной точки
+  // не было видно нигде, включая список чатов.
   if (user?.avatar) {
     return (
       <div className={`avatar img ${size}`}>
         <img src={mediaUrl(user.avatar)} alt={user.name || ''} />
-        {ring && online && <span className="presence" />}
+        {online && <span className="presence" />}
       </div>
     )
   }
@@ -87,7 +105,7 @@ export function Avatar({ user, size = '', online, ring = true }) {
       ) : (
         initials(user?.name)
       )}
-      {ring && online && <span className="presence" />}
+      {online && <span className="presence" />}
     </div>
   )
 }
@@ -390,8 +408,8 @@ export function MessageList({
               </span>
             )}
             {b.showName && (
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, color: colorFor(m.sender_id) }}>
-                {sender ? sender.name : m.sender_id?.startsWith('u') ? 'Неизвестный' : chat?.user?.name}
+              <div className="msg-sender-name" style={{ color: colorFor(m.sender_id) }}>
+                {sender ? displayNameOf(sender) : displayNameOf(chat?.user)}
               </div>
             )}
             {m.forwarded_from && (
@@ -452,7 +470,7 @@ export function ChatHeader({ peer, statusText, typing, onBack, onInfo, onCall, o
         <Avatar user={peer} size="sm" ring={false} />
         <div style={{ minWidth: 0 }}>
           <div className="chat-header-name">
-            {peer.name}
+            {displayNameOf(peer)}
             {peer.is_channel && <IconMega width={15} height={15} className="name-ico" />}
             {peer.is_public && <IconGlobe width={14} height={14} className="name-ico" />}
           </div>
@@ -499,7 +517,7 @@ export function StoriesBar({ groups, meId, onOpen, onAdd }) {
             <div className={`story-ring ${seen ? 'seen' : ''}`}>
               <Avatar user={g.user} size="sm" ring={false} />
             </div>
-            <span className="story-name">{g.user.id === meId ? 'Вы' : g.user.name.split(' ')[0]}</span>
+            <span className="story-name">{g.user.id === meId ? 'Вы' : shortNameOf(g.user)}</span>
           </button>
         )
       })}
@@ -647,7 +665,37 @@ export function StoryComposer({ onCancel, onPublish }) {
   )
 }
 
-/* ==================== БОКОВАЯ ПАНЕЛЬ ==================== */
+/* ==================== КТО В СЕТИ ==================== */
+
+/*
+ * Лента «В сети» над списком чатов. Список приходит из /api/users и обновляется
+ * тем же ws-событием 'users', которое сервер рассылает при входе и выходе
+ * собеседника, поэтому точка на аватаре и эта лента всегда свежие.
+ * В «Невидимке» (privacy: invisible) пользователь в online не попадает.
+ */
+export function OnlineStrip({ users, onSelect }) {
+  if (!users?.length) return null
+  return (
+    <div className="online-strip">
+      <div className="online-head">
+        <span className="online-dot" />
+        <span>В сети — {users.length}</span>
+      </div>
+      <div className="online-list">
+        {users.map((u) => (
+          <button key={u.id} className="online-item" onClick={() => onSelect(u.id)} title={displayNameOf(u)}>
+            <div className="online-ring">
+              <Avatar user={u} size="sm" ring={false} online />
+            </div>
+            <span className="online-name">{shortNameOf(u)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ==================== САЙДБАР ==================== */
 
 const TABS = [
   { k: 'all', label: 'Все', icon: <IconChats width={17} height={17} /> },
@@ -664,7 +712,7 @@ export function chatBucket(c) {
   return 'dm'
 }
 
-export function Sidebar({ chats, activeKey, onSelect, onMenu, onNewChat, theme, onTheme, stories, onOpenStory, onAddStory, meId, tab: tabProp, onTabChange }) {
+export function Sidebar({ chats, activeKey, onSelect, onMenu, onNewChat, theme, onTheme, stories, onOpenStory, onAddStory, meId, tab: tabProp, onTabChange, onlineUsers, onStartChat }) {
   const [q, setQ] = useState('')
   const [tabInner, setTabInner] = useState('all')
   // Вкладка нужна и App (правая пустая панель), поэтому состояние поднимаем наверх,
@@ -674,7 +722,7 @@ export function Sidebar({ chats, activeKey, onSelect, onMenu, onNewChat, theme, 
 
   const filtered = chats.filter((c) => {
     if (tab !== 'all' && chatBucket(c) !== tab) return false
-    return (c.user.name || '').toLowerCase().includes(q.toLowerCase())
+    return displayNameOf(c.user).toLowerCase().includes(q.toLowerCase())
   })
 
   return (
@@ -691,6 +739,8 @@ export function Sidebar({ chats, activeKey, onSelect, onMenu, onNewChat, theme, 
       </div>
 
       {stories?.length ? <StoriesBar groups={stories} meId={meId} onOpen={onOpenStory} onAdd={onAddStory} /> : null}
+
+      {onlineUsers?.length ? <OnlineStrip users={onlineUsers} onSelect={onStartChat} /> : null}
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -725,7 +775,7 @@ export function Sidebar({ chats, activeKey, onSelect, onMenu, onNewChat, theme, 
                 <div className="chat-top">
                   <div className="chat-name">
                     {c.is_channel && <IconMega width={14} height={14} className="name-ico" />}
-                    {c.user.name}
+                    {displayNameOf(c.user)}
                   </div>
                   {last && <div className="chat-time">{listTime(last.created_at)}</div>}
                 </div>
@@ -776,7 +826,7 @@ export function Drawer({ me, chats, onClose, onLogout, onNewGroup, onNewChannel,
       <div className="drawer">
         <div className="drawer-head" onClick={() => { onClose(); onProfile() }}>
           <Avatar user={me} ring={false} />
-          <div className="name">{me.name}</div>
+          <div className="name">{displayNameOf(me)}</div>
           <div className="phone">{me.phone || me.username || 'профиль без телефона'}</div>
         </div>
         <div style={{ padding: '8px 0' }}>
@@ -814,13 +864,13 @@ const PRESENCE_OPTIONS = [
 
 export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar, onCall, onVideo, onMessage, onFavorites }) {
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ name: peer?.name || '', username: peer?.username || '', bio: peer?.bio || '' })
+  const [form, setForm] = useState({ name: peer?.name || '', prefix: peer?.prefix || '', username: peer?.username || '', bio: peer?.bio || '' })
   const [privacy, setPrivacy] = useState(peer?.privacy || 'visible')
   const [dnd, setDnd] = useState(!!peer?.dnd)
   const fileRef = useRef(null)
 
   useEffect(() => {
-    setForm({ name: peer?.name || '', username: peer?.username || '', bio: peer?.bio || '' })
+    setForm({ name: peer?.name || '', prefix: peer?.prefix || '', username: peer?.username || '', bio: peer?.bio || '' })
     setPrivacy(peer?.privacy || 'visible')
     setDnd(!!peer?.dnd)
     setEdit(false)
@@ -874,6 +924,12 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
               <input className="search-input" value={form.name} maxLength={40} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="field">
+              <label>Префикс перед именем</label>
+              <input className="search-input" value={form.prefix} maxLength={16} placeholder="★, 👑, [VIP] — или пусто"
+                onChange={(e) => setForm({ ...form, prefix: e.target.value })} />
+              <div className="hint">Виден всем в списке чатов и в группах. Поставьте, например, ★ — и выделитесь среди остальных.</div>
+            </div>
+            <div className="field">
               <label>Имя пользователя</label>
               <div className="username-wrap">
                 <span>@</span>
@@ -912,7 +968,7 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
           </div>
         ) : (
           <>
-            <div className="profile-title">{peer.name}</div>
+            <div className="profile-title">{displayNameOf(peer)}</div>
             <div className="profile-sub">{statusText}</div>
             {!peer.is_group && !peer.is_self && !peer.is_channel && (
               <>
@@ -1196,6 +1252,10 @@ const WALLPAPERS = [
   { k: 'night', label: 'Ночь', css: 'linear-gradient(135deg,#1b2836,#2b5278)', dark: true },
   { k: 'graphite', label: 'Графит', css: 'linear-gradient(135deg,#2b2b2b,#4a4a4a)', dark: true },
   { k: 'forest', label: 'Лес', css: 'linear-gradient(160deg,#123 0%,#1e4d3b 60%,#2b6b4f 100%)', dark: true },
+  // Картинка лежит в client/public/wallpapers → Vite копирует её в dist как есть,
+  // поэтому путь абсолютный и работает и на сервере, и в APK.
+  // dark: false — фон светлый, поэтому пузыри остаются обычными, а не тёмными.
+  { k: 'soft', label: 'Розовое', url: '/wallpapers/soft.jpg', dark: false },
 ]
 
 export function ChatMenu({ chat, onClose, onAction, settings }) {
@@ -1244,13 +1304,19 @@ export function WallpaperModal({ current, onClose, onPick, onUpload, onRemove })
         </div>
         <div className="modal-body">
           <div className="wall-grid">
-            {WALLPAPERS.map((w) => (
-              <button key={w.k} className={`wall-cell ${current?.type === 'color' && current.k === w.k ? 'on' : ''}`}
-                style={{ background: w.css || 'var(--pattern)' }} onClick={() => onPick(w)}>
-                <span>{w.label}</span>
-              </button>
-            ))}
-            {current?.type === 'image' && (
+            {WALLPAPERS.map((w) => {
+              const on = current?.k === w.k && (w.url ? current?.type === 'image' : current?.type === 'color')
+              return (
+                <button key={w.k} className={`wall-cell ${on ? 'on' : ''}`}
+                  style={w.url
+                    ? { backgroundImage: `url(${w.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    : { background: w.css || 'var(--pattern)' }}
+                  onClick={() => onPick(w)}>
+                  <span>{w.label}</span>
+                </button>
+              )
+            })}
+            {current?.type === 'image' && !WALLPAPERS.some((w) => w.k === current.k) && (
               <button className="wall-cell on" style={{ backgroundImage: `url(${current.url})`, backgroundSize: 'cover' }}>
                 <span>Своё фото</span>
               </button>

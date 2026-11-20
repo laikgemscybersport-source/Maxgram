@@ -106,8 +106,10 @@ export function CircleRecorder({ onCancel, onDone }) {
   useEffect(() => {
     if (recording) return
     let alive = true
+    // Только ideal: веб-камеры на ПК не умеют квадрат 480×480, точные требования
+    // вызвали бы OverconstrainedError и «Камера недоступна» вместо превью.
     navigator.mediaDevices.getUserMedia({
-      video: { width: 480, height: 480, facingMode: camIdx === 0 ? 'user' : 'environment' },
+      video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
       audio: true,
     }).then((stream) => {
       if (!alive) { stream.getTracks().forEach((t) => t.stop()); return }

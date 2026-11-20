@@ -311,11 +311,27 @@ function presenceOf(u) {
   return { online: false, text: `был(а) в сети ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`, exact: u.last_seen };
 }
 
+function normalizePrefix(v) {
+  // Одна короткая метка перед именем: "★ Влад", "👑 Влад", "[VIP] Влад".
+  // Убираем управляющие символы и переносы — метка должна быть в одну строку.
+  const clean = String(v).replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 16);
+  return clean;
+}
+
+// Имя вместе с префиксом. Отдаём готовым полем, чтобы клиентам не пришлось
+// склеивать строки в каждом месте, где показывается имя.
+function displayName(u) {
+  if (!u) return '';
+  return u.prefix ? `${u.prefix} ${u.name}` : u.name;
+}
+
 function publicUser(u) {
   const presence = presenceOf(u);
   return {
     id: u.id,
     name: u.name,
+    prefix: u.prefix || '',
+    display_name: displayName(u),
     phone: formatPhone(u.phone),
     username: u.username,
     bio: u.bio,
@@ -1091,17 +1107,18 @@ app.post('/api/auth/logout', auth, (req, res) => {
 });
 
 app.put('/api/me', auth, (req, res) => {
-  const { name, bio, username, privacy, dnd } = req.body;
+  const { name, bio, username, privacy, dnd, prefix } = req.body;
   if (typeof name === 'string' && name.trim()) req.user.name = name.trim().slice(0, 40);
   if (typeof bio === 'string') req.user.bio = bio.slice(0, 140);
-  if (['visible', 'invisible'].includes(privacy)) req.user.privacy = privacy;
-  if (typeof dnd === 'boolean') req.user.dnd = dnd;
   if (typeof username === 'string') {
     const clean = normalizeHandle(username);
     if (clean && !Object.values(users).some((u) => u.id !== req.userId && u.username === clean)) {
       req.user.username = clean;
     }
   }
+  if (['visible', 'invisible'].includes(privacy)) req.user.privacy = privacy;
+  if (typeof dnd === 'boolean') req.user.dnd = dnd;
+  if (typeof prefix === 'string') req.user.prefix = normalizePrefix(prefix) || '';
   broadcast({ type: 'users', users: usersSnapshot() });
   res.json({ user: privateUser(req.user) });
 });
@@ -1484,7 +1501,7 @@ app.post('/api/messages', auth, (req, res) => {
       reply = {
         id: target.id,
         sender_id: target.sender_id,
-        sender_name: author ? author.name : 'Неизвестный',
+        sender_name: author ? displayName(author) : 'Неизвестный',
         content: previewText(target).slice(0, 200),
         kind: target.kind,
       };

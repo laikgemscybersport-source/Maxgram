@@ -37,6 +37,7 @@ import {
   Avatar,
   previewOf,
   chatBucket,
+  displayNameOf,
 } from './components/ui.jsx'
 import { IconBookmark, IconHistory, IconLink, IconPhoneGroup, IconUsers } from './components/Icons.jsx'
 
@@ -67,7 +68,7 @@ function QaItem({ chat, onSelect, sub, bookmark }) {
         <Avatar user={chat.user} online={chat.user.online} size="sm" ring={false} />
       )}
       <div className="qa-info">
-        <div className="qa-name">{chat.user.name}</div>
+        <div className="qa-name">{displayNameOf(chat.user)}</div>
         <div className="qa-sub">{sub}</div>
       </div>
     </button>
@@ -224,7 +225,7 @@ export default function App() {
   // Имя участника по id: из справочника, иначе сам id — сетка не должна показывать технический id
   const nameOf = useCallback((id) => {
     const u = directoryRef.current.find((x) => x.id === id)
-    return u ? u.name : id
+    return u ? displayNameOf(u) : id
   }, [])
 
   /* ==================== ЗВОНОК ==================== */
@@ -583,9 +584,19 @@ export default function App() {
       if (!me) return
 
       switch (data.type) {
-        case 'users':
+        case 'users': {
           setDirectory(data.users)
+          // Список чатов хранит копию собеседника из chatSummary — подтягиваем
+          // актуальный online/presence, иначе точка в списке отстаёт на целый
+          // цикл перезагрузки чатов.
+          const byId = Object.fromEntries(data.users.map((u) => [u.id, u]))
+          setChats((prev) => prev.map((c) => {
+            const fresh = c.user?.is_group || c.user?.is_channel || c.user?.is_self ? null : byId[c.user?.id]
+            if (!fresh) return c
+            return { ...c, user: { ...c.user, ...fresh } }
+          }))
           break
+        }
 
         case 'message': {
           const m = data.message
@@ -969,7 +980,7 @@ export default function App() {
     switch (action) {
       case 'reply':
         setEdit(null)
-        setReply({ id: msg.id, sender_id: msg.sender_id, sender_name: msg.sender_id === user.id ? 'Вы' : (usersById[msg.sender_id]?.name || chat?.user?.name || ''), content: msg.content || '' })
+        setReply({ id: msg.id, sender_id: msg.sender_id, sender_name: msg.sender_id === user.id ? 'Вы' : (displayNameOf(usersById[msg.sender_id]) || displayNameOf(chat?.user) || ''), content: msg.content || '' })
         break
       case 'edit':
         setReply(null)
@@ -1053,7 +1064,10 @@ export default function App() {
   }
 
   const pickWallpaper = async (w) => {
-    await patchSettings({ wallpaper: w.k === 'default' ? null : { type: 'color', k: w.k } })
+    // Пресет с картинкой хранится как image: url берётся из раздачи клиента,
+    // поэтому mediaUrl превратит его в абсолютный путь для APK.
+    const next = w.k === 'default' ? null : w.url ? { type: 'image', k: w.k, url: w.url } : { type: 'color', k: w.k }
+    await patchSettings({ wallpaper: next })
     setWallpaperOpen(false)
   }
 
@@ -1253,6 +1267,9 @@ export default function App() {
   const isSelf = !!activeChat?.is_self
   const typingName = activeKey ? typing[activeKey] : null
   const usersById = Object.fromEntries(directory.map((u) => [u.id, u]))
+  // Присутствие приходит ws-событием 'users' при каждом входе/выходе, поэтому
+  // лента и зелёные точки не устаревают между опросами.
+  const onlineUsers = directory.filter((u) => u.id !== user.id && u.online)
   const settings = activeChat?.settings || {}
   const noCopy = !!settings.no_copy
 
@@ -1263,6 +1280,12 @@ export default function App() {
     : wp?.css
       ? { background: wp.css }
       : undefined
+  // Тёмная подложка пузырей нужна на тёмных обоях. Для встроенной картинки это
+  // знает сам пресет (dark), для загруженного фото подложку делаем тёмной:
+  // предсказать яркость чужого снимка нельзя, а на тёмной текст читается всегда.
+  const darkBg = settings.wallpaper?.type === 'image'
+    ? wp?.dark !== false
+    : !!wp?.dark
 
   let statusText
   if (isChannel) statusText = peer?.phone || 'канал'
@@ -1290,10 +1313,12 @@ export default function App() {
         onAddStory={() => setStoryComposer(true)}
         tab={tab}
         onTabChange={setTab}
+        onlineUsers={onlineUsers}
+        onStartChat={startChat}
       />
 
       {view === 'chat' && peer ? (
-        <div className="chat-view" style={bgStyle} data-darkbg={wp?.dark || settings.wallpaper?.type === 'image' ? '1' : '0'}>
+        <div className="chat-view" style={bgStyle} data-darkbg={darkBg ? '1' : '0'}>
           <ChatHeader
             peer={peer}
             statusText={statusText}
@@ -1419,7 +1444,7 @@ export default function App() {
       {confirmClear && (
         <ConfirmModal
           title="Очистить историю?"
-          text={`Все сообщения в «${peer?.name}» будут удалены для всех участников.`}
+          text={`Все сообщения в «${displayNameOf(peer)}» будут удалены для всех участников.`}
           confirmLabel="Очистить"
           danger
           onConfirm={async () => {

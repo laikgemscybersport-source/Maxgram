@@ -123,6 +123,17 @@ async function login(phone, profile) {
   ok('PUT /api/me сохраняет имя', upd.body.user.name === 'Алексей Т.');
   await req('/api/me', { method: 'PUT', body: JSON.stringify({ name: 'Алексей' }) }, u1.token);
 
+  // 5b. Префикс перед именем (метка «★ Влад»)
+  const pref = await req('/api/me', { method: 'PUT', body: JSON.stringify({ prefix: '★' }) }, u1.token);
+  ok('PUT /api/me сохраняет префикс', pref.status === 200 && pref.body.user.prefix === '★');
+  ok('display_name собирается с префиксом', pref.body.user.display_name === '★ Алексей');
+  const prefClean = await req('/api/me', { method: 'PUT', body: JSON.stringify({ prefix: '  👑\nVIP  ' }) }, u1.token);
+  ok('префикс нормализуется (пробелы/переносы)', prefClean.body.user.prefix === '👑 VIP');
+  const prefCut = await req('/api/me', { method: 'PUT', body: JSON.stringify({ prefix: 'x'.repeat(40) }) }, u1.token);
+  ok('префикс ограничен 16 символами', prefCut.body.user.prefix.length === 16);
+  const prefOff = await req('/api/me', { method: 'PUT', body: JSON.stringify({ prefix: '' }) }, u1.token);
+  ok('пустой префикс снимает метку', prefOff.body.user.prefix === '' && prefOff.body.user.display_name === 'Алексей');
+
   // 6. Провайдеры OAuth
   const prov = await req('/api/auth/providers');
   ok('GET /auth/providers -> 4 провайдера', prov.status === 200 && Object.keys(prov.body.providers).length === 4);
