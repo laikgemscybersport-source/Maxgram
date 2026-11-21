@@ -82,74 +82,116 @@ export function VoiceRecorder({ onCancel, onDone }) {
 export function CircleRecorder({ onCancel, onDone }) {
   const [sec, setSec] = useState(0)
   const [recording, setRecording] = useState(false)
+  const [ready, setReady] = useState(false)
   const [err, setErr] = useState('')
   const [camIdx, setCamIdx] = useState(0)
   const [hasMany, setHasMany] = useState(false)
   const videoRef = useRef(null)
-  const previewStream = useRef(null)
+  const streamRef = useRef(null)
+  const recordingRef = useRef(false)
   const rec = useRef(null)
   const tick = useRef(null)
 
+  const killStream = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+  }
+
   useEffect(() => {
-    if (!canRecord()) { setErr('Браузер не поддерживает видеозапись'); return }
+    // Браузер отдаёт navigator.mediaDevices только в защищённом контексте.
+    // На ПК мессенджер часто открыт по http://IP — иначе выглядит как «камеры нет».
+    if (!canRecord()) {
+      setErr(window.isSecureContext === false
+        ? 'Камера доступна только по https или через localhost'
+        : 'Браузер не поддерживает видеозапись')
+      return
+    }
     navigator.mediaDevices.enumerateDevices()
       .then((ds) => setHasMany(ds.filter((d) => d.kind === 'videoinput').length > 1))
       .catch(() => {})
     return () => {
       clearInterval(tick.current)
       if (rec.current) rec.current.cancel()
-      previewStream.current?.getTracks().forEach((t) => t.stop())
+      killStream()
     }
   }, [])
 
-  // Предпросмотр камеры до начала записи
+  // Камера открывается один раз при монтировании и остаётся открытой всю сессию:
+  // тот же поток показывает себя в круге и пишется MediaRecorder'ом. Переоткрытие
+  // на ПК давало чёрный круг и NotReadableError (камера ещё не освобождена).
+  // Только ideal: веб-камеры не умеют квадрат, точные размеры вызвали бы
+  // OverconstrainedError и «Камера недоступна» вместо превью.
   useEffect(() => {
-    if (recording) return
     let alive = true
-    // Только ideal: веб-камеры на ПК не умеют квадрат 480×480, точные требования
-    // вызвали бы OverconstrainedError и «Камера недоступна» вместо превью.
+    setReady(false)
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
+      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
       audio: true,
     }).then((stream) => {
       if (!alive) { stream.getTracks().forEach((t) => t.stop()); return }
-      previewStream.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
-    }).catch(() => setErr('Нет доступа к камере'))
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play?.().catch(() => {})
+      }
+      setReady(true)
+    }).catch((e) => {
+      if (!alive) return
+      setErr(e?.name === 'NotAllowedError' ? 'Разрешите доступ к камере' : 'Камера недоступна')
+    })
     return () => {
       alive = false
-      previewStream.current?.getTracks().forEach((t) => t.stop())
-      previewStream.current = null
+      // Во время записи поток принадлежит MediaRecorder — не трогаем его.
+      if (!recordingRef.current) killStream()
     }
-  }, [camIdx, recording])
+  }, [camIdx])
 
   const start = async () => {
     setErr('')
-    previewStream.current?.getTracks().forEach((t) => t.stop())
-    previewStream.current = null
+    if (!streamRef.current) {
+      try {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
+          audio: true,
+        })
+        if (videoRef.current) videoRef.current.srcObject = streamRef.current
+      } catch {
+        setErr('Нет доступа к камере')
+        return
+      }
+    }
     const r = await recordCircle({
+      stream: streamRef.current,
       onStop: (blob, dur) => onDone(blob, dur),
-      onError: setErr,
+      onError: (m) => { setErr(m); setRecording(false); recordingRef.current = false },
     })
     if (!r) return
     rec.current = r
+    recordingRef.current = true
     setRecording(true)
-    if (videoRef.current) videoRef.current.srcObject = r.preview
     tick.current = setInterval(() => setSec((s) => s + 1), 1000)
   }
 
-  const stop = () => { clearInterval(tick.current); setRecording(false); rec.current?.stop() }
+  const stop = () => {
+    clearInterval(tick.current)
+    setRecording(false)
+    recordingRef.current = false
+    rec.current?.stop()
+    killStream()
+  }
   const cancel = () => {
     clearInterval(tick.current)
     if (rec.current) rec.current.cancel()
+    recordingRef.current = false
     onCancel()
   }
 
   return (
     <div className="circle-rec">
       <div className="circle-frame">
-        <video ref={videoRef} autoPlay playsInline muted />
-        {!recording && <div className="circle-hint">Нажмите, чтобы записать<br />видеокружок</div>}
+        <video ref={videoRef} className={camIdx === 0 ? 'mirror' : ''} autoPlay playsInline muted />
+        {!ready && !err && <div className="circle-hint">Включаем камеру…</div>}
+        {ready && !recording && !err && <div className="circle-hint subtle">Нажмите, чтобы записать</div>}
         {recording && <span className="circle-rec-dot" />}
       </div>
       <div className="circle-time">{fmtDur(sec)}</div>
@@ -158,7 +200,7 @@ export function CircleRecorder({ onCancel, onDone }) {
         {recording ? (
           <button className="rec-stop big" onClick={stop}><span className="rec-stop-dot" /></button>
         ) : (
-          <button className="circle-go" onClick={start} />
+          <button className="circle-go" onClick={start} disabled={!ready || !!err} />
         )}
         {hasMany ? (
           <button className="rec-x" onClick={() => setCamIdx((i) => (i + 1) % 2)}>⟳</button>

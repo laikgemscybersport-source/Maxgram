@@ -1565,6 +1565,11 @@ textarea {
   display: block;
 }
 
+/* Передняя камера — зеркальное отражение, чтобы чувствовать себя как в зеркале */
+.circle-frame video.mirror {
+  transform: scaleX(-1);
+}
+
 .circle-hint {
   position: absolute;
   inset: 0;
@@ -1576,6 +1581,12 @@ textarea {
   line-height: 1.4;
   background: rgba(0, 0, 0, 0.45);
   pointer-events: none;
+}
+
+.circle-hint.subtle {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
 }
 
 .circle-rec-dot {

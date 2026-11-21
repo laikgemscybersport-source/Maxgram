@@ -51,17 +51,22 @@ export async function recordVoice({ onStop, onError, maxSec = 120 }) {
   return { stop, cancel: () => { chunks.length = 0; stop() }, stream }
 }
 
-// Запись видеокружка (круглая аватарка-видео, как в Telegram)
-export async function recordCircle({ onStop, onError, maxSec = 60 }) {
-  let stream
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: 'user' },
-      audio: true,
-    })
-  } catch (e) {
-    onError?.(e.name === 'NotAllowedError' ? 'Разрешите доступ к камере' : 'Камера недоступна')
-    return null
+// Запись видеокружка (круглая аватарка-видео, как в Telegram).
+// stream можно передать извне — тогда пишем в уже показанный предпросмотр, не
+// переоткрывая камеру: на ПК переоткрытие сразу после stop() упиралось в занятую
+// камеру (NotReadableError) и давало чёрный круг вместо себя в кадре.
+export async function recordCircle({ stream: provided, onStop, onError, maxSec = 60 }) {
+  let stream = provided
+  if (!stream) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
+        audio: true,
+      })
+    } catch (e) {
+      onError?.(e.name === 'NotAllowedError' ? 'Разрешите доступ к камере' : 'Камера недоступна')
+      return null
+    }
   }
 
   const mimeType = pickMime(['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'])
@@ -75,6 +80,7 @@ export async function recordCircle({ onStop, onError, maxSec = 60 }) {
   }
 
   const chunks = []
+  let cancelled = false
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
   const startedAt = Date.now()
   const timer = setTimeout(() => stop(), maxSec * 1000)
@@ -85,13 +91,22 @@ export async function recordCircle({ onStop, onError, maxSec = 60 }) {
   }
 
   rec.onstop = () => {
+    // Запись закончена (стоп, отмена или лимит времени) — камера больше не нужна.
+    // stop() на уже остановленном треке безопасен, так что повторный вызов из
+    // компонента не страшен.
     stream.getTracks().forEach((t) => t.stop())
+    if (cancelled) return
     const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' })
     onStop?.(blob, Math.round((Date.now() - startedAt) / 1000))
   }
 
   rec.start(250)
-  return { stop, cancel: () => { chunks.length = 0; stop() }, stream, preview: stream }
+  return {
+    stop,
+    cancel: () => { cancelled = true; chunks.length = 0; stop() },
+    stream,
+    preview: stream,
+  }
 }
 
 export function fmtDur(sec) {
