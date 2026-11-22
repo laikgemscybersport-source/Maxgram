@@ -91,19 +91,42 @@ module.exports = {
   /* ---------- Вход через соцсети (OAuth) ---------- */
   // Для каждого провайдера нужно зарегистрировать приложение и разрешить
   // redirect URI: https://<ваш-домен>/auth/<провайдер>/callback
-  //   Google  — https://console.cloud.google.com/apis/credentials
-  //   Яндекс  — https://id.yandex.ru/developer/applications
-  //   VK      — https://id.vk.com/about/business/go
-  //   OK      — https://dev.ok.ru/create
+  // Адрес без https:// и без порта не примут — поднимите HTTPS (см. tools/tunnel.js).
+  // Пока поля пустые, кнопка на экране входа вернёт подсказку вместо падения.
   oauth: {
+    // Google — https://console.cloud.google.com/apis/credentials
+    //   1. Выберите проект → «Создать учётные данные» → «Идентификатор клиента OAuth» → «Веб-приложение»
+    //   2. «Авторизованные URI перенаправления»: https://<ваш-домен>/auth/google/callback
+    //   3. Скопируйте Client ID и Client Secret
+    // client_id выглядит так: 1234567890abc-def.apps.googleusercontent.com
     google: { client_id: '', client_secret: '' },
+
+    // Яндекс — https://id.yandex.ru/developer/applications
+    //   1. «Создать приложение» → платформа «Веб-сервис»
+    //   2. Платформы → «Добавить сайт»: https://<ваш-домен>/auth/yandex/callback
+    //   3. Доступные API: включите «Яндекс ID: имя, фамилия, e-mail»
+    //   4. Скопируйте «Идентификатор» и «Секретный ключ»
+    // client_id — 32 шестнадцатеричных символа
     yandex: { client_id: '', client_secret: '' },
+
+    // VK — https://id.vk.com/about/business/go
+    //   1. «Создать приложение» → тип «Веб-сайт»
+    //   2. «База домена»: ваш-домен без протокола; «Авторизованные редиректы»:
+    //      https://<ваш-домен>/auth/vk/callback
+    //   3. Скопируйте ID приложения и защищённый ключ
+    // client_id — число, например 1234567
     vk: { client_id: '', client_secret: '' },
-    // У OK пара ключей называется иначе: public_key идёт в client_id, api_secret — в api_secret
+
+    // OK — https://dev.ok.ru/create
+    //   1. «Конструктор приложений» → заполните название и адрес сайта
+    //   2. «API-настройки» → URI перехода: https://<ваш-домен>/auth/ok/callback
+    //   3. Скопируйте «Публичный ключ» и «Ключ API»
+    // У OK ключи называются иначе: public_key идёт в client_id, api_secret — в api_secret
     ok: { client_id: '', public_key: '', api_secret: '' },
   },
 
   // Публичный адрес этого сервера — обязателен для OAuth.
   // Без него редирект уходит на localhost и провайдер отказывает.
+  // Пусто = адрес берётся из заголовков запроса (удобно на туннеле).
   public_url: 'http://localhost:3000',
 };
