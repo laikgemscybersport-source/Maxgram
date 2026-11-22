@@ -2,11 +2,23 @@
 // Сигнализация идёт через общий WebSocket мессенджера (type: 'call').
 // Для сетей за симметричным NAT добавьте TURN-сервер в ICE servers ниже.
 
+import { listDevices, audioConstraints, videoConstraints } from './devices.js'
+
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:global.stun.twilio.com:3478' },
   // { urls: 'turn:ваш-turn-сервер:3478', username: 'user', credential: 'pass' },
 ]
+
+// Собираем constraints с учётом выбранных в настройках устройств.
+// Если сохранённого устройства уже нет в системе — падаем на дефолтное.
+async function mediaFor(video, opts = {}) {
+  const devices = await listDevices()
+  return {
+    audio: audioConstraints(devices),
+    video: video ? videoConstraints(devices, opts) : false,
+  }
+}
 
 export default class CallManager {
   constructor({ send, onIncoming, onState, onError }) {
@@ -33,10 +45,7 @@ export default class CallManager {
   async getMedia(video) {
     if (!this.supported) throw new Error('Браузер не поддерживает WebRTC')
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video: video ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
-      })
+      return await navigator.mediaDevices.getUserMedia(await mediaFor(video))
     } catch (e) {
       if (e.name === 'NotAllowedError') throw new Error('Доступ к микрофону/камере запрещён — разрешите его в браузере')
       if (e.name === 'NotFoundError') throw new Error('Не найдено устройство записи')
@@ -248,10 +257,9 @@ export class GroupCallManager {
   async getMedia(video) {
     if (!this.supported) throw new Error('Браузер не поддерживает WebRTC')
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video: video ? { width: { ideal: 640 }, height: { ideal: 360 }, facingMode: 'user' } : false,
-      })
+      // Mesh-звонок: на каждого участника своё соединение, поэтому берём
+      // умеренное 640×360 — иначе при 3-4 собеседниках канал не вытянет кодирование.
+      return await navigator.mediaDevices.getUserMedia(await mediaFor(video, { w: 640, h: 360 }))
     } catch (e) {
       if (e.name === 'NotAllowedError') throw new Error('Доступ к микрофону/камере запрещён — разрешите его в браузере')
       if (e.name === 'NotFoundError') throw new Error('Не найдено устройство записи')

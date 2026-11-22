@@ -1,12 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { api } from '../api'
 import { fmtDur, recordVoice, recordCircle, canRecord } from '../media'
+import { listDevices, camId, micId, setCamId, setMicId, audioConstraints, deviceName } from '../devices.js'
 import { StaticMap } from './MediaMessage.jsx'
 import {
   IconPhoto, IconFile, IconPin, IconCamera, IconCircle, IconUserPlus,
   IconCalendar, IconClose, IconMic, IconSend,
 } from './Icons.jsx'
 import { Avatar, colorFor, initials } from './ui.jsx'
+import { DevicePicker, useDeviceList } from './DeviceSelector.jsx'
 
 /* ==================== Меню вложений ==================== */
 
@@ -86,11 +88,14 @@ export function CircleRecorder({ onCancel, onDone }) {
   const [err, setErr] = useState('')
   const [camIdx, setCamIdx] = useState(0)
   const [hasMany, setHasMany] = useState(false)
+  const [picker, setPicker] = useState(null) // 'mic' | 'cam'
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const recordingRef = useRef(false)
   const rec = useRef(null)
   const tick = useRef(null)
+
+  const { mics, cameras } = useDeviceList()
 
   const killStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -119,15 +124,27 @@ export function CircleRecorder({ onCancel, onDone }) {
   // Камера открывается один раз при монтировании и остаётся открытой всю сессию:
   // тот же поток показывает себя в круге и пишется MediaRecorder'ом. Переоткрытие
   // на ПК давало чёрный круг и NotReadableError (камера ещё не освобождена).
-  // Только ideal: веб-камеры не умеют квадрат, точные размеры вызвали бы
-  // OverconstrainedError и «Камера недоступна» вместо превью.
+  // facingMode применяется только когда камера не выбрана явно — иначе они
+  // конфликтуют и getUserMedia падает на ПК с одной веб-камерой.
+  const openCam = useCallback(async () => {
+    const devices = await listDevices()
+    const picked = camId() && cameras.some((d) => d.deviceId === camId())
+    return navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 640 },
+        ...(picked ? { deviceId: { exact: camId() } }
+          : { facingMode: camIdx === 0 ? 'user' : 'environment' }),
+      },
+      audio: audioConstraints(devices),
+    })
+  }, [camIdx, cameras])
+
   useEffect(() => {
+    if (!canRecord()) return
     let alive = true
     setReady(false)
-    navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
-      audio: true,
-    }).then((stream) => {
+    openCam().then((stream) => {
       if (!alive) { stream.getTracks().forEach((t) => t.stop()); return }
       streamRef.current = stream
       if (videoRef.current) {
@@ -144,16 +161,28 @@ export function CircleRecorder({ onCancel, onDone }) {
       // Во время записи поток принадлежит MediaRecorder — не трогаем его.
       if (!recordingRef.current) killStream()
     }
-  }, [camIdx])
+  }, [openCam])
+
+  // Смена устройства во время показа предпросмотра: пересобираем поток.
+  const switchTo = async () => {
+    if (recordingRef.current) return
+    killStream()
+    setReady(false)
+    try {
+      const stream = await openCam()
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+      setReady(true)
+    } catch {
+      setErr('Камера недоступна')
+    }
+  }
 
   const start = async () => {
     setErr('')
     if (!streamRef.current) {
       try {
-        streamRef.current = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: camIdx === 0 ? 'user' : 'environment' },
-          audio: true,
-        })
+        streamRef.current = await openCam()
         if (videoRef.current) videoRef.current.srcObject = streamRef.current
       } catch {
         setErr('Нет доступа к камере')
@@ -186,15 +215,55 @@ export function CircleRecorder({ onCancel, onDone }) {
     onCancel()
   }
 
+  // Зеркалим только фронтальную камеру и только когда она не выбрана вручную
+  // (для выбранной deviceId ориентация неизвестна).
+  const mirror = camIdx === 0 && !camId()
+  const close = () => setPicker(null)
+
   return (
     <div className="circle-rec">
       <div className="circle-frame">
-        <video ref={videoRef} className={camIdx === 0 ? 'mirror' : ''} autoPlay playsInline muted />
+        <video ref={videoRef} className={mirror ? 'mirror' : ''} autoPlay playsInline muted />
         {!ready && !err && <div className="circle-hint">Включаем камеру…</div>}
         {ready && !recording && !err && <div className="circle-hint subtle">Нажмите, чтобы записать</div>}
         {recording && <span className="circle-rec-dot" />}
       </div>
       <div className="circle-time">{fmtDur(sec)}</div>
+
+      {/* Выбор устройств: микрофон и камера (стрелки как в звонках на ПК) */}
+      <div className="circle-devices">
+        <div className="call-device">
+          <span className="circle-device-ico"><IconMic width={18} height={18} /></span>
+          <DevicePicker
+            open={picker === 'mic'}
+            onToggle={() => setPicker(picker === 'mic' ? null : 'mic')}
+            onClose={close}
+            items={mics}
+            value={micId()}
+            placeholder="Микрофон"
+            title={deviceName(mics, micId(), 'Выбрать микрофон')}
+            note="Звук пишется в видеокружок"
+            onChange={(id) => { setMicId(id); close(); switchTo() }}
+          />
+          <span className="circle-device-name">{deviceName(mics, micId(), 'по умолчанию')}</span>
+        </div>
+        <div className="call-device">
+          <span className="circle-device-ico"><IconCamera width={18} height={18} /></span>
+          <DevicePicker
+            open={picker === 'cam'}
+            onToggle={() => setPicker(picker === 'cam' ? null : 'cam')}
+            onClose={close}
+            items={cameras}
+            value={camId()}
+            placeholder="Камера"
+            title={deviceName(cameras, camId(), 'Выбрать камеру')}
+            note="Превью обновится сразу"
+            onChange={(id) => { setCamId(id); close(); switchTo() }}
+          />
+          <span className="circle-device-name">{deviceName(cameras, camId(), 'по умолчанию')}</span>
+        </div>
+      </div>
+
       <div className="circle-actions">
         <button className="rec-x" onClick={cancel}><IconClose width={22} height={22} /></button>
         {recording ? (
@@ -202,7 +271,7 @@ export function CircleRecorder({ onCancel, onDone }) {
         ) : (
           <button className="circle-go" onClick={start} disabled={!ready || !!err} />
         )}
-        {hasMany ? (
+        {hasMany && !camId() ? (
           <button className="rec-x" onClick={() => setCamIdx((i) => (i + 1) % 2)}>⟳</button>
         ) : <span className="circle-slot" />}
       </div>

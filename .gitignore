@@ -3,6 +3,8 @@ client/node_modules/
 client/dist/
 desktop/
 desktop-new/
+desktop2/
+desktop3/
 uploads/
 uploads-ui-check/
 secrets.js

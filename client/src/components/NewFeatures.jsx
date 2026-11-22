@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Avatar } from './ui.jsx'
-import { IconArrowLeft, IconLink, IconPlus, IconPhoneGroup, IconMic, IconVideo } from './Icons.jsx'
+import { IconArrowLeft, IconLink, IconPlus, IconPhoneGroup, IconMic, IconVideo, IconHeadphones } from './Icons.jsx'
+import {
+  DevicePicker, useDeviceList, micId, speakerId, camId,
+  setMicId, setSpeakerId, setCamId, deviceName, applySink,
+} from './DeviceSelector.jsx'
 
 /* ==================== ИСТОРИЯ СООБЩЕСТВА ==================== */
 export function JournalModal({ chat, onClose }) {
@@ -241,13 +245,15 @@ export function GroupCallModal({ chat, onClose, onStart }) {
 }
 
 /* --- Плитка одного участника: video получает MediaStream через ref --- */
-function GcTile({ id, name, stream, muted, video, self }) {
+function GcTile({ id, name, stream, muted, video, self, speakers }) {
   const ref = useRef(null)
   useEffect(() => {
     if (ref.current && ref.current.srcObject !== (stream || null)) {
       ref.current.srcObject = stream || null
+      // Свой поток глушим (иначе эхо), чужой — выводим в выбранные наушники.
+      if (!muted) applySink(ref.current, speakers)
     }
-  }, [stream])
+  }, [stream, muted, speakers])
 
   return (
     <div className={`gc-tile ${self ? 'self' : ''}`}>
@@ -266,6 +272,10 @@ export function GroupCallOverlay({ gc, chat, micOn, camOn, onToggleMic, onToggle
   const video = !!gc.video
   const title = chat?.user?.name || 'Групповой звонок'
   const total = 1 + (gc.peers?.length || 0)
+  const [picker, setPicker] = useState(null)
+  const { mics, speakers, cameras } = useDeviceList()
+  const close = () => setPicker(null)
+  const nameOf = (list, id, fb) => deviceName(list, id) || fb
 
   return (
     <div className="call-overlay">
@@ -279,7 +289,7 @@ export function GroupCallOverlay({ gc, chat, micOn, camOn, onToggleMic, onToggle
       <div className="gc-grid">
         <GcTile id="me" name="Вы" stream={gc.local} muted video={video && camOn} self />
         {(gc.peers || []).map((p) => (
-          <GcTile key={p.id} id={p.id} name={p.name} stream={p.remote} muted={false} video={video} />
+          <GcTile key={p.id} id={p.id} name={p.name} stream={p.remote} muted={false} video={video} speakers={speakers} />
         ))}
       </div>
 
@@ -293,12 +303,57 @@ export function GroupCallOverlay({ gc, chat, micOn, camOn, onToggleMic, onToggle
       </div>
 
       <div className="call-controls">
-        <button className={`call-btn ${micOn ? '' : 'off'}`} onClick={onToggleMic} title="Микрофон">
-          <IconMic width={24} height={24} />
-        </button>
-        <button className={`call-btn ${camOn ? '' : 'off'}`} onClick={onToggleCam} title="Камера">
-          <IconVideo width={24} height={24} />
-        </button>
+        <div className="call-device">
+          <button className={`call-btn ${micOn ? '' : 'off'}`} onClick={onToggleMic} title="Микрофон">
+            <IconMic width={24} height={24} />
+          </button>
+          <DevicePicker
+            open={picker === 'mic'}
+            onToggle={() => setPicker(picker === 'mic' ? null : 'mic')}
+            onClose={close}
+            items={mics}
+            value={micId()}
+            placeholder="Микрофон"
+            title={nameOf(mics, micId(), 'Выбрать микрофон')}
+            note="Сработает при следующем звонке"
+            onChange={(id) => { setMicId(id); close() }}
+          />
+        </div>
+
+        <div className="call-device">
+          <button className="call-btn" title="Наушники"><IconHeadphones width={24} height={24} /></button>
+          <DevicePicker
+            open={picker === 'spk'}
+            onToggle={() => setPicker(picker === 'spk' ? null : 'spk')}
+            onClose={close}
+            items={speakers}
+            value={speakerId()}
+            placeholder="Наушники"
+            title={nameOf(speakers, speakerId(), 'Выбрать наушники')}
+            note="Звук переключается сразу"
+            onChange={(id) => { setSpeakerId(id); close() }}
+          />
+        </div>
+
+        {video && (
+          <div className="call-device">
+            <button className={`call-btn ${camOn ? '' : 'off'}`} onClick={onToggleCam} title="Камера">
+              <IconVideo width={24} height={24} />
+            </button>
+            <DevicePicker
+              open={picker === 'cam'}
+              onToggle={() => setPicker(picker === 'cam' ? null : 'cam')}
+              onClose={close}
+              items={cameras}
+              value={camId()}
+              placeholder="Камера"
+              title={nameOf(cameras, camId(), 'Выбрать камеру')}
+              note="Сработает при следующем звонке"
+              onChange={(id) => { setCamId(id); close() }}
+            />
+          </div>
+        )}
+
         <button className="call-btn reject" onClick={onLeave} title="Покинуть звонок">
           <IconPhoneGroup width={24} height={24} style={{ transform: 'rotate(135deg)' }} />
         </button>

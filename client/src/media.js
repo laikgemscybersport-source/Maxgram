@@ -2,6 +2,8 @@
 // Голосовое → audio/webm (Telegram пишет ogg/opus, но webm шире всего поддержан в браузерах).
 // Видеокружок → короткое видео с квадратной дорожкой, снимается через getUserMedia.
 
+import { listDevices, audioConstraints } from './devices.js'
+
 function pickMime(candidates) {
   for (const c of candidates) {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c
@@ -15,7 +17,8 @@ export const canRecord = () =>
 export async function recordVoice({ onStop, onError, maxSec = 120 }) {
   let stream
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const devices = await listDevices()
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(devices) })
   } catch (e) {
     onError?.(e.name === 'NotAllowedError' ? 'Разрешите доступ к микрофону' : 'Микрофон недоступен')
     return null

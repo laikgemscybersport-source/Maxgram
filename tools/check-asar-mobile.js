@@ -21,6 +21,11 @@ const checks = [
   ['видеокружок: камера 640 ideal', src.includes('640')],
   ['видеокружок: зеркало фронтальной камеры', cssSrc.includes('scaleX(-1)')],
   ['видеокружок: подсказка про https', src.includes('isSecureContext')],
+  // Выбор микрофона/наушников/камеры (devices.js + DeviceSelector.jsx)
+  ['выбор устройств: ключ localStorage', src.includes('mg_mic_deviceId')],
+  ['выбор устройств: стрелка списка', cssSrc.includes('device-picker-btn')],
+  ['выбор устройств: констрейнты аудио', src.includes('audioinput')],
+  ['выбор устройств: вывод в наушники', src.includes('setSinkId')],
 ];
 
 let failed = 0;
