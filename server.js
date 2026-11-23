@@ -1130,47 +1130,22 @@ app.post('/api/me/avatar', auth, upload.single('photo'), (req, res) => {
   res.json({ user: privateUser(req.user) });
 });
 
-/* ==================== OAuth (Google / Яндекс / VK / OK) ==================== */
+/* ==================== OAuth (Google) ====================
+   Яндекс, VK и OK намеренно убраны из списка провайдеров: кнопка появляется
+   только у тех, чьи ключи реально выдаются. Код обмена left intact — чтобы
+   вернуть провайдера, достаточно добавить его объект в OAUTH и ключи в secrets.js. */
 
 const OAUTH = {
   google: {
     label: 'Google',
     // keys — как называются ключи у этого провайдера в secrets.js: подсказка
-    // пользователю должна совпадать с реальными полями, иначе он будет искать
-    // client_secret там, где у провайдера api_secret.
+    // пользователю должна совпадать с реальными полями.
     keys: 'client_id и client_secret',
     authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
     token: 'https://oauth2.googleapis.com/token',
     scope: 'openid email profile',
     userinfo: 'https://openidconnect.googleapis.com/v1/userinfo',
     configured: () => !!(config.oauth.google.client_id && config.oauth.google.client_secret),
-  },
-  yandex: {
-    label: 'Яндекс',
-    keys: 'client_id и client_secret',
-    authorize: 'https://oauth.yandex.ru/authorize',
-    token: 'https://oauth.yandex.ru/token',
-    scope: 'account:info email',
-    userinfo: 'https://login.yandex.ru/info?format=json',
-    configured: () => !!(config.oauth.yandex.client_id && config.oauth.yandex.client_secret),
-  },
-  vk: {
-    label: 'VK',
-    keys: 'client_id и client_secret',
-    authorize: 'https://oauth.vk.com/authorize',
-    token: 'https://oauth.vk.com/access_token',
-    scope: 'email',
-    userinfo: 'https://api.vk.com/method/users.get',
-    configured: () => !!(config.oauth.vk.client_id && config.oauth.vk.client_secret),
-  },
-  ok: {
-    label: 'OK',
-    keys: 'client_id (он же public_key) и api_secret',
-    authorize: 'https://connect.ok.ru/oauth/authorize',
-    token: 'https://connect.ok.ru/oauth/access_token',
-    scope: 'standard',
-    userinfo: 'https://api.ok.ru/fb.do',
-    configured: () => !!(config.oauth.ok.client_id && config.oauth.ok.api_secret),
   },
 };
 
@@ -1199,85 +1174,21 @@ async function getJson(url, headers = {}) {
 
 // Обменивает код авторизации на профиль провайдера.
 // client_secret остаётся на сервере и никогда не уходит в браузер.
-async function exchangeOAuthCode(provider, code, redirectUri) {
+async function exchangeOAuthCode(provider, code, redirectUri, verifier) {
   const p = config.oauth[provider];
   const meta = OAUTH[provider];
+  if (provider !== 'google') throw new Error(`Неизвестный OAuth-провайдер: ${provider}`);
 
-  if (provider === 'google') {
-    const tok = await postForm(meta.token, {
-      code, client_id: p.client_id, client_secret: p.client_secret,
-      redirect_uri: redirectUri, grant_type: 'authorization_code',
-    });
-    const info = await getJson(meta.userinfo, { Authorization: 'Bearer ' + tok.access_token });
-    return {
-      pid: String(info.sub),
-      name: info.name || info.given_name || 'Пользователь Google',
-      email: info.email || null,
-      avatar: info.picture || null,
-    };
-  }
-
-  if (provider === 'yandex') {
-    const tok = await postForm(meta.token, {
-      code, grant_type: 'authorization_code', client_id: p.client_id, client_secret: p.client_secret,
-    });
-    const info = await getJson(meta.userinfo, { Authorization: 'OAuth ' + tok.access_token });
-    return {
-      pid: String(info.id),
-      name: info.real_name || info.display_name || info.first_name || 'Пользователь Яндекса',
-      email: info.default_email || info.emails?.[0] || null,
-      avatar: info.default_avatar ? `https://avatars.yandex.net/get-yapic/${info.default_avatar}/islands-200` : null,
-    };
-  }
-
-  if (provider === 'vk') {
-    const tok = await postForm(meta.token, {
-      code, client_id: p.client_id, client_secret: p.client_secret, redirect_uri: redirectUri,
-    });
-    const info = await getJson(
-      `${meta.userinfo}?user_id=${tok.user_id}&fields=photo_200&v=5.131&access_token=${tok.access_token}`
-    );
-    const u = (info.response || [])[0] || {};
-    return {
-      pid: String(u.id || tok.user_id),
-      name: [u.first_name, u.last_name].filter(Boolean).join(' ') || 'Пользователь VK',
-      email: tok.email || null,
-      avatar: u.photo_200 || null,
-    };
-  }
-
-  /* OK требует подписи каждого запроса. По документации apiok.ru:
-     session_secret_key = md5(access_token + application_secret_key),
-     затем sig = md5(отсортированные key=value + session_secret_key).
-     access_token и format в подпись не входят, параметр называется sig,
-     а публичный ключ — application_key (не application_id). */
   const tok = await postForm(meta.token, {
-    code, client_id: p.client_id, client_secret: p.api_secret,
-    redirect_uri: redirectUri, grant_type: 'authorization_code',
+    code, client_id: p.client_id, client_secret: p.client_secret,
+    redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: verifier,
   });
-  const params = {
-    method: 'users.getCurrentUser',
-    application_key: p.client_id,
-    fields: 'uid,first_name,last_name,pic_150',
-    format: 'json',
-    access_token: tok.access_token,
-  };
-  const sessionSecret = crypto.createHash('md5').update(tok.access_token + p.api_secret).digest('hex');
-  const toSign = Object.keys(params)
-    .filter((k) => k !== 'access_token' && k !== 'format' && params[k] !== '')
-    .sort()
-    .map((k) => k + '=' + params[k])
-    .join('');
-  params.sig = crypto.createHash('md5').update(toSign + sessionSecret).digest('hex');
-  const info = await getJson(meta.userinfo + '?' + new URLSearchParams(params));
-  if (info.error_code || info.error) {
-    throw new Error(`OK: ${info.error_msg || info.error_code || JSON.stringify(info).slice(0, 160)}`);
-  }
+  const info = await getJson(meta.userinfo, { Authorization: 'Bearer ' + tok.access_token });
   return {
-    pid: String(info.uid),
-    name: [info.first_name, info.last_name].filter(Boolean).join(' ') || 'Пользователь OK',
-    email: null,
-    avatar: info.pic_150 || null,
+    pid: String(info.sub),
+    name: info.name || info.given_name || 'Пользователь Google',
+    email: info.email || null,
+    avatar: info.picture || null,
   };
 }
 
@@ -1378,20 +1289,21 @@ app.get('/api/auth/:provider/start', (req, res) => {
 
   const state = crypto.randomBytes(12).toString('hex');
   const redirect = `${publicOrigin(req)}/auth/${id}/callback`;
-  oauthStates.set(state, { provider: id, expires: Date.now() + CODE_TTL, redirect });
+
+  // PKCE обязателен для Google-клиентов типа «Desktop app» (installed): без
+  // code_verifier обмен кода отвечает invalid_grant. Верификатор живёт ровно
+  // одну попытку входа — его кладём в oauthStates рядом с redirect.
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  oauthStates.set(state, { provider: id, expires: Date.now() + CODE_TTL, redirect, verifier });
 
   const p = config.oauth[id];
-  let url;
-  if (id === 'google') {
-    url = `${provider.authorize}?client_id=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=${encodeURIComponent(provider.scope)}&state=${state}&prompt=select_account`;
-  } else if (id === 'yandex') {
-    url = `${provider.authorize}?client_id=${p.client_id}&response_type=code&scope=${encodeURIComponent(provider.scope)}&state=${state}`;
-  } else if (id === 'vk') {
-    url = `${provider.authorize}?client_id=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=${provider.scope}&state=${state}&v=5.131`;
-  } else {
-    // У ОК публичный ключ в параметре application_key
-    url = `${provider.authorize}?application_key=${p.client_id}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=${state}&layout=w`;
-  }
+  const url =
+    `${provider.authorize}?client_id=${p.client_id}` +
+    `&redirect_uri=${encodeURIComponent(redirect)}` +
+    `&response_type=code&scope=${encodeURIComponent(provider.scope)}` +
+    `&state=${state}&prompt=select_account` +
+    `&code_challenge=${challenge}&code_challenge_method=S256`;
   res.json({ url, redirect_uri: redirect });
 });
 
@@ -1413,7 +1325,7 @@ app.get('/auth/:provider/callback', async (req, res) => {
   oauthStates.delete(state);
 
   try {
-    const prof = await exchangeOAuthCode(id, String(code), saved.redirect);
+    const prof = await exchangeOAuthCode(id, String(code), saved.redirect, saved.verifier);
     const user = findOAuthUser(id, prof);
     const session = issueSession(user);
     broadcast({ type: 'users', users: usersSnapshot() });

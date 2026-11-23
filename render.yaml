@@ -100,22 +100,10 @@ services:
         value: '5'
       - key: SMS_LIMIT_IP
         value: '20'
-      # Ключи OAuth — только здесь, в config.js их быть не должно:
+      # Ключи OAuth — только здесь, в config.js их быт не должен:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: YANDEX_CLIENT_ID
-        sync: false
-      - key: YANDEX_CLIENT_SECRET
-        sync: false
-      - key: VK_CLIENT_ID
-        sync: false
-      - key: VK_CLIENT_SECRET
-        sync: false
-      - key: OK_APP_ID
-        sync: false
-      - key: OK_API_SECRET
         sync: false
       # Persistent disk: файлы загрузок переживают рестарты и деплои.
       # Монтируем диск вне исходников и указываем серверу абсолютный путь.

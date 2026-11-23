@@ -138,25 +138,12 @@ module.exports = {
   },
 
   // ---------- OAuth-провайдеры ----------
-  // Для каждого нужно зарегистрировать приложение и вписать client_id / client_secret.
-  // Пока значения пустые — кнопка вернёт понятную ошибку вместо падения.
+  // Яндекс, VK и OK убраны из доступа: кнопка есть только у Google. Структуру
+  // можно вернуть, добавив провайдера в OAUTH на сервере и сюда же.
   oauth: {
     google: {
       client_id: pick('GOOGLE_CLIENT_ID', so.google && so.google.client_id),
       client_secret: pick('GOOGLE_CLIENT_SECRET', so.google && so.google.client_secret),
-    },
-    yandex: {
-      client_id: pick('YANDEX_CLIENT_ID', so.yandex && so.yandex.client_id),
-      client_secret: pick('YANDEX_CLIENT_SECRET', so.yandex && so.yandex.client_secret),
-    },
-    vk: {
-      client_id: pick('VK_CLIENT_ID', so.vk && so.vk.client_id),
-      client_secret: pick('VK_CLIENT_SECRET', so.vk && so.vk.client_secret),
-    },
-    ok: {
-      // В OK публичный ключ называется public_key и в запросах идёт как application_key
-      client_id: pick('OK_APP_ID', so.ok && (so.ok.client_id || so.ok.public_key)),
-      api_secret: pick('OK_API_SECRET', so.ok && so.ok.api_secret),
     },
   },
 

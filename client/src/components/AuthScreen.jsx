@@ -115,13 +115,10 @@ export default function AuthScreen({ onAuthed }) {
     }
   }
 
-  // У OK ключи называются иначе, чем у остальных: public_key + api_secret.
-  const oauthKeysHint = (id) => (id === 'ok' ? 'public_key и api_secret' : 'client_id и client_secret')
-
   const startOauth = async (id) => {
     setError('')
     if (!providers[id]?.configured) {
-      setError(`${providers[id]?.label || id}: нужно вписать ${oauthKeysHint(id)} в messenger/secrets.js — образец в secrets.example.js, проверка npm run doctor`)
+      setError(`${providers[id]?.label || id}: нужно вписать client_id и client_secret в messenger/secrets.js — образец в secrets.example.js, проверка npm run doctor`)
       return
     }
     setBusy(true)
@@ -191,7 +188,7 @@ export default function AuthScreen({ onAuthed }) {
             <div className="oauth-grid">
               {Object.entries(providers).map(([id, p]) => (
                 <button key={id} className={`oauth-btn oauth-${id}`} onClick={() => startOauth(id)} title={p.configured ? 'Войти' : 'Не настроен'}>
-                  <span className="oauth-ico">{id === 'google' ? 'G' : id === 'yandex' ? 'Я' : id === 'vk' ? 'VK' : 'OK'}</span>
+                  <span className="oauth-ico">{id === 'google' ? 'G' : id.slice(0, 1).toUpperCase()}</span>
                   {p.label}
                   {!p.configured && <span className="oauth-off">не настроен</span>}
                 </button>

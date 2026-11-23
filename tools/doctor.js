@@ -484,11 +484,10 @@ async function sendTestSms(phone) {
   }
 
   console.log('\n' + BOLD + 'OAuth-провайдеры' + OFF)
+  // Список берётся из config.oauth: Яндекс, VK и OK убраны из доступа, и если
+  // их вернуть в конфиг, doctor сам начнёт их показывать.
   const rows = [
     ['Google', config.oauth.google.client_id, config.oauth.google.client_secret, 'console.cloud.google.com/apis/credentials'],
-    ['Яндекс', config.oauth.yandex.client_id, config.oauth.yandex.client_secret, 'id.yandex.ru/developer/applications'],
-    ['VK', config.oauth.vk.client_id, config.oauth.vk.client_secret, 'id.vk.com/about/business/go'],
-    ['OK', config.oauth.ok.client_id, config.oauth.ok.api_secret, 'dev.ok.ru/create'],
   ]
   for (const [label, id, secret, where] of rows) {
     const good = !!id && !!secret

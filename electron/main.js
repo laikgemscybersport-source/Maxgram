@@ -103,34 +103,22 @@ module.exports = {
   },
 
   // ---------- Вход через соцсети (OAuth) ----------
-  // Кнопка на экране входа работает сразу, но пишет «не настроен», пока поля пустые.
-  // Для каждого провайдера зарегистрируйте приложение и разрешите redirect URI:
-  //   https://<ваш-домен>/auth/<провайдер>/callback
-  // Нужен HTTPS-адрес: локально — tunnel-run.cmd, в интернете — свой домен.
+  // Доступен только Google: Яндекс, VK и OK убраны из серверного кода.
+  // Кнопка на экране входа работает сразу, если вписать client_id и client_secret.
+  //
+  // Клиент в Google Cloud Console создаётся одного из двух типов:
+  //   «Desktop app» — redirect URI http://localhost; для таких клиентов Google
+  //     принимает localhost с любым портом и путём, поэтому вход работает и
+  //     локально, и на туннеле без правок. Такой клиент требует PKCE — он уже
+  //     включён на сервере, ничего дополнительно настраивать не нужно.
+  //   «Веб-приложение» — для боевого HTTPS-домена; тогда в «Авторизованные URI
+  //     перенаправления» добавьте https://<ваш-домен>/auth/google/callback и
+  //     укажите этот домен в public_url ниже.
+  // Ключи: https://console.cloud.google.com/apis/credentials → «Создать учётные
+  // данные» → «Идентификатор клиента OAuth». Если Google выдал JSON-файл, поля
+  // называются в нём так же: client_id и client_secret.
   oauth: {
-    // Google — https://console.cloud.google.com/apis/credentials
-    //   «Создать учётные данные» → «Идентификатор клиента OAuth» → «Веб-приложение»
-    //   URI перенаправления: https://<ваш-домен>/auth/google/callback
-    // client_id выглядит так: 1234567890abc-def.apps.googleusercontent.com
     google: { client_id: '', client_secret: '' },
-
-    // Яндекс — https://id.yandex.ru/developer/applications
-    //   «Создать приложение» → платформа «Веб-сервис» → добавить сайт
-    //   https://<ваш-домен>/auth/yandex/callback, включить «Яндекс ID»
-    // client_id — 32 шестнадцатеричных символа
-    yandex: { client_id: '', client_secret: '' },
-
-    // VK — https://id.vk.com/about/business/go
-    //   «Создать приложение» → «Веб-сайт» → «База домена» (без https://)
-    //   и «Авторизованные редиректы»: https://<ваш-домен>/auth/vk/callback
-    // client_id — число, например 1234567
-    vk: { client_id: '', client_secret: '' },
-
-    // OK — https://dev.ok.ru/create
-    //   «Конструктор приложений» → «API-настройки» → URI перехода:
-    //   https://<ваш-домен>/auth/ok/callback
-    // У OK публичный ключ идёт в client_id, «Ключ API» — в api_secret
-    ok: { client_id: '', api_secret: '' },
   },
 
   public_url: '',

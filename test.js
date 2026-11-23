@@ -134,12 +134,23 @@ async function login(phone, profile) {
   const prefOff = await req('/api/me', { method: 'PUT', body: JSON.stringify({ prefix: '' }) }, u1.token);
   ok('пустой префикс снимает метку', prefOff.body.user.prefix === '' && prefOff.body.user.display_name === 'Алексей');
 
-  // 6. Провайдеры OAuth
+  // 6. Провайдеры OAuth: доступен только Google (Яндекс, VK и OK убраны)
   const prov = await req('/api/auth/providers');
-  ok('GET /auth/providers -> 4 провайдера', prov.status === 200 && Object.keys(prov.body.providers).length === 4);
+  const pids = Object.keys(prov.body.providers || {});
+  ok('GET /auth/providers -> только Google', prov.status === 200 && pids.length === 1 && pids[0] === 'google');
   ok('демо-режим SMS объявлен', prov.body.sms_provider === 'demo');
   const gs = await req('/api/auth/google/start');
-  ok('не настроенный Google -> 501 с подсказкой', gs.status === 501 && /client_id/.test(gs.body?.error || ''));
+  if (prov.body.providers.google.configured) {
+    // Ключи в secrets.js: ожидаем готовый URL с PKCE (desktop-клиент Google его требует)
+    const u = new URL(gs.body.url);
+    ok('настроенный Google -> url с PKCE',
+      gs.status === 200 && u.searchParams.get('code_challenge_method') === 'S256' &&
+      !!u.searchParams.get('code_challenge') && !!u.searchParams.get('state'));
+  } else {
+    ok('не настроенный Google -> 501 с подсказкой', gs.status === 501 && /client_id/.test(gs.body?.error || ''));
+  }
+  const ys = await req('/api/auth/yandex/start');
+  ok('Яндекс больше не доступен -> 404', ys.status === 404);
 
   // 7. Чаты
   const chats = await req('/api/users/u1/chats', {}, u1.token);
@@ -345,7 +356,7 @@ async function login(phone, profile) {
   ok('в бандле есть видеокружок', js.includes('Видеокружок'));
   ok('в бандле есть WebRTC-звонок', js.includes('RTCPeerConnection'));
   ok('в бандле есть геолокация', js.includes('Моё местоположение'));
-  ok('в бандле есть OAuth-провайдеры', js.includes('Яндекс') && js.includes('Google'));
+  ok('в бандле есть OAuth-кнопка Google', js.includes('oauth-btn') && js.includes('Google'));
   ok('в бандле есть каналы и истории', js.includes('Подписаться') && js.includes('Новая история'));
   ok('в бандле есть меню сообщения', js.includes('Закрепить') && js.includes('Переслать'));
   ok('в бандле есть настройки приватности статуса', js.includes('Невидимка'));

@@ -1018,7 +1018,9 @@ textarea {
 
 .oauth-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* auto-fit: с одним провайдером кнопка занимает всю ширину, при
+     возврате остальных они снова встают в две колонки */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
 }
 
