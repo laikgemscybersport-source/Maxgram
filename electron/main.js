@@ -102,10 +102,34 @@ module.exports = {
     twilio: { account_sid: '', auth_token: '', from: '', service_sid: '' },
   },
 
+  // ---------- Вход через соцсети (OAuth) ----------
+  // Кнопка на экране входа работает сразу, но пишет «не настроен», пока поля пустые.
+  // Для каждого провайдера зарегистрируйте приложение и разрешите redirect URI:
+  //   https://<ваш-домен>/auth/<провайдер>/callback
+  // Нужен HTTPS-адрес: локально — tunnel-run.cmd, в интернете — свой домен.
   oauth: {
+    // Google — https://console.cloud.google.com/apis/credentials
+    //   «Создать учётные данные» → «Идентификатор клиента OAuth» → «Веб-приложение»
+    //   URI перенаправления: https://<ваш-домен>/auth/google/callback
+    // client_id выглядит так: 1234567890abc-def.apps.googleusercontent.com
     google: { client_id: '', client_secret: '' },
+
+    // Яндекс — https://id.yandex.ru/developer/applications
+    //   «Создать приложение» → платформа «Веб-сервис» → добавить сайт
+    //   https://<ваш-домен>/auth/yandex/callback, включить «Яндекс ID»
+    // client_id — 32 шестнадцатеричных символа
     yandex: { client_id: '', client_secret: '' },
+
+    // VK — https://id.vk.com/about/business/go
+    //   «Создать приложение» → «Веб-сайт» → «База домена» (без https://)
+    //   и «Авторизованные редиректы»: https://<ваш-домен>/auth/vk/callback
+    // client_id — число, например 1234567
     vk: { client_id: '', client_secret: '' },
+
+    // OK — https://dev.ok.ru/create
+    //   «Конструктор приложений» → «API-настройки» → URI перехода:
+    //   https://<ваш-домен>/auth/ok/callback
+    // У OK публичный ключ идёт в client_id, «Ключ API» — в api_secret
     ok: { client_id: '', api_secret: '' },
   },
 

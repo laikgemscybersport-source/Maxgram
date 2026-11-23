@@ -1135,6 +1135,10 @@ app.post('/api/me/avatar', auth, upload.single('photo'), (req, res) => {
 const OAUTH = {
   google: {
     label: 'Google',
+    // keys — как называются ключи у этого провайдера в secrets.js: подсказка
+    // пользователю должна совпадать с реальными полями, иначе он будет искать
+    // client_secret там, где у провайдера api_secret.
+    keys: 'client_id и client_secret',
     authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
     token: 'https://oauth2.googleapis.com/token',
     scope: 'openid email profile',
@@ -1143,6 +1147,7 @@ const OAUTH = {
   },
   yandex: {
     label: 'Яндекс',
+    keys: 'client_id и client_secret',
     authorize: 'https://oauth.yandex.ru/authorize',
     token: 'https://oauth.yandex.ru/token',
     scope: 'account:info email',
@@ -1151,6 +1156,7 @@ const OAUTH = {
   },
   vk: {
     label: 'VK',
+    keys: 'client_id и client_secret',
     authorize: 'https://oauth.vk.com/authorize',
     token: 'https://oauth.vk.com/access_token',
     scope: 'email',
@@ -1159,6 +1165,7 @@ const OAUTH = {
   },
   ok: {
     label: 'OK',
+    keys: 'client_id (он же public_key) и api_secret',
     authorize: 'https://connect.ok.ru/oauth/authorize',
     token: 'https://connect.ok.ru/oauth/access_token',
     scope: 'standard',
@@ -1365,7 +1372,7 @@ app.get('/api/auth/:provider/start', (req, res) => {
   if (!provider) return res.status(404).json({ error: 'Неизвестный провайдер' });
   if (!provider.configured()) {
     return res.status(501).json({
-      error: `${provider.label} не настроен: впишите client_id и client_secret в messenger/secrets.js (образец — secrets.example.js) или задайте переменными окружения. Проверка: npm run doctor`,
+      error: `${provider.label} не настроен: впишите ${provider.keys} в messenger/secrets.js (образец — secrets.example.js) или задайте переменными окружения. Проверка: npm run doctor`,
     });
   }
 

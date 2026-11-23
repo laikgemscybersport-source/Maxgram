@@ -115,10 +115,13 @@ export default function AuthScreen({ onAuthed }) {
     }
   }
 
+  // У OK ключи называются иначе, чем у остальных: public_key + api_secret.
+  const oauthKeysHint = (id) => (id === 'ok' ? 'public_key и api_secret' : 'client_id и client_secret')
+
   const startOauth = async (id) => {
     setError('')
     if (!providers[id]?.configured) {
-      setError(`${providers[id]?.label || id}: нужно вписать client_id и client_secret в messenger/secrets.js — образец в secrets.example.js, проверка npm run doctor`)
+      setError(`${providers[id]?.label || id}: нужно вписать ${oauthKeysHint(id)} в messenger/secrets.js — образец в secrets.example.js, проверка npm run doctor`)
       return
     }
     setBusy(true)
