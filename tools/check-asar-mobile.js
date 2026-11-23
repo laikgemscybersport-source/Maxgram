@@ -10,6 +10,9 @@ const js = list.find((p) => /assets[\\/].*\.js$/.test(p));
 const css = list.find((p) => /assets[\\/].*\.css$/.test(p));
 const src = asar.extractFile(archive, js.slice(1)).toString('utf8');
 const cssSrc = asar.extractFile(archive, css.slice(1)).toString('utf8');
+// Серверный код тоже внутри asar: OAuth-флоу и PKCE живут именно там.
+const serverSrc = asar.extractFile(archive, 'server.js').toString('utf8');
+const configSrc = asar.extractFile(archive, 'config.js').toString('utf8');
 
 const checks = [
   ['soft.jpg в архиве', list.some((p) => p.includes('soft.jpg'))],
@@ -26,6 +29,11 @@ const checks = [
   ['выбор устройств: стрелка списка', cssSrc.includes('device-picker-btn')],
   ['выбор устройств: констрейнты аудио', src.includes('audioinput')],
   ['выбор устройств: вывод в наушники', src.includes('setSinkId')],
+  // OAuth: остался только Google, desktop-клиент требует PKCE
+  ['oauth: PKCE на сервере', serverSrc.includes('code_challenge_method') && serverSrc.includes('code_verifier')],
+  ['oauth: Яндекс/VK/OK убраны', !/oauth\.yandex|oauth\.vk|oauth\.ok/.test(configSrc)],
+  // Секреты не должны попасть в сборку: их читает только secrets.js вне asar
+  ['oauth: секретных ключей в архиве нет', !serverSrc.includes('GOCSPX-') && !configSrc.includes('GOCSPX-')],
 ];
 
 let failed = 0;
