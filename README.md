@@ -472,6 +472,8 @@ messenger/
 | POST | `/api/channels/:id/join`, `/leave` | подписаться / отписаться |
 | POST | `/api/channels/:id/avatar` | аватар канала (multipart `photo`) |
 | GET | `/api/discover?q=` | каталог публичных каналов, групп и людей |
+| GET | `/api/lookup-phone?phone=` | найти регистрацию ровно по номеру (уважает `privacy=invisible`) |
+| GET | `/api/lookup-username?username=` | найти регистрацию по `@username`: точное совпадение — один профиль, частичное — список похожих |
 | GET/POST | `/api/stories` | список историй / опубликовать историю |
 | POST | `/api/stories/:id/view` | засчитать просмотр |
 | DELETE | `/api/stories/:id` | удалить свою историю |

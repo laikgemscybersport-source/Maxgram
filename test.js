@@ -152,6 +152,38 @@ async function login(phone, profile) {
   const ys = await req('/api/auth/yandex/start');
   ok('Яндекс больше не доступен -> 404', ys.status === 404);
 
+  // 6b. Поиск по @username: точное совпадение, частичное, приватность
+  const luAnon = await req('/api/lookup-username?username=alexey');
+  ok('lookup-username без токена -> 401', luAnon.status === 401);
+
+  const luShort = await req('/api/lookup-username?username=ale', {}, u2.token);
+  ok('хэндл короче 4 символов -> 400', luShort.status === 400);
+
+  const luExact = await req('/api/lookup-username?username=alexey', {}, u2.token);
+  ok('точное совпадение -> профиль', luExact.status === 200 && luExact.body.found === true && luExact.body.user?.id === 'u1');
+  ok('точное совпадение -> chat_key для перехода', luExact.body.chat_key === 'p:u1,u2', luExact.body.chat_key);
+
+  const luAt = await req('/api/lookup-username?username=@Alexey', {}, u2.token);
+  ok('@ и регистр не важны', luAt.status === 200 && luAt.body.user?.id === 'u1');
+
+  const luSelf = await req('/api/lookup-username?username=alexey', {}, u1.token);
+  ok('свой хэндл помечен is_self', luSelf.status === 200 && luSelf.body.is_self === true);
+
+  const luMiss = await req('/api/lookup-username?username=zzzzneet', {}, u2.token);
+  ok('несуществующий -> found:false без кандидатов', luMiss.body.found === false && (luMiss.body.candidates || []).length === 0);
+
+  const luPart = await req('/api/lookup-username?username=alex', {}, u2.token);
+  ok('частичное совпадение -> кандидаты', luPart.status === 200 && luPart.body.found === false && luPart.body.candidates.some((c) => c.username === 'alexey'));
+
+  // Скрытый профиль не находится ни точным, ни частичным поиском
+  const hid = await req('/api/me', { method: 'PUT', body: JSON.stringify({ privacy: 'invisible' }) }, u1.token);
+  ok('privacy=invisible сохранён', hid.status === 200 && hid.body.user.privacy === 'invisible');
+  const luHidden = await req('/api/lookup-username?username=alexey', {}, u2.token);
+  ok('скрытый не находится точно', luHidden.body.found === false);
+  const luHiddenPart = await req('/api/lookup-username?username=alex', {}, u2.token);
+  ok('скрытый не попадает в кандидаты', !(luHiddenPart.body.candidates || []).some((c) => c.id === 'u1'));
+  await req('/api/me', { method: 'PUT', body: JSON.stringify({ privacy: 'visible' }) }, u1.token);
+
   // 7. Чаты
   const chats = await req('/api/users/u1/chats', {}, u1.token);
   ok('GET chats u1 -> 200', chats.status === 200);

@@ -1917,9 +1917,40 @@ app.get('/api/chats/:key/events', auth, (req, res) => {
   });
 });
 
-/* ---------- Поиск по номеру телефона ----------
-   Отдельно от /discover: там телефон намеренно не матчится. Здесь ищем ровно по
-   номеру, уважая privacy=invisible (такого пользователя не видно никому). */
+/* ---------- Поиск по имени пользователя (@username) ----------
+   В отличие от /discover (где поиск подстрокой по имени и хэндлу и где
+   возвращаются все), здесь цель — найти конкретную регистрацию: точное
+   совпадение хэндла даёт одного человека, а частичное — список кандидатов.
+   Пользователи с privacy=invisible не находятся, как и в поиске по номеру. */
+
+app.get('/api/lookup-username', auth, (req, res) => {
+  const raw = String(req.query.username || req.query.q || '').trim();
+  const handle = normalizeHandle(raw);
+  if (!handle) {
+    return res.status(400).json({ error: 'Имя пользователя должно быть не короче 4 символов: letters, digits, _' });
+  }
+
+  const visible = (u) => u.privacy !== 'invisible';
+  const exact = Object.values(users).find((u) => visible(u) && u.username === handle);
+  if (exact) {
+    return res.json({
+      found: true,
+      username: handle,
+      user: publicUser(exact),
+      chat_key: pairKey(req.userId, exact.id),
+      is_self: exact.id === req.userId,
+    });
+  }
+
+  // Точного нет — показываем похожие, чтобы можно было добрать хэндл руками.
+  const candidates = Object.values(users)
+    .filter((u) => visible(u) && u.id !== req.userId && u.username && u.username.includes(handle))
+    .sort((a, b) => a.username.length - b.username.length || a.username.localeCompare(b.username))
+    .slice(0, 12)
+    .map((u) => publicUser(u));
+
+  res.json({ found: false, username: handle, candidates });
+});
 
 app.get('/api/lookup-phone', auth, (req, res) => {
   const raw = String(req.query.phone || '').trim();

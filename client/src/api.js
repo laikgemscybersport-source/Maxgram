@@ -147,6 +147,9 @@ export const api = {
   // ---------- Поиск по номеру телефона ----------
   lookupPhone: (phone) => request('/lookup-phone?phone=' + encodeURIComponent(phone || '')),
 
+  // ---------- Поиск по @username ----------
+  lookupUsername: (username) => request('/lookup-username?username=' + encodeURIComponent(username || '')),
+
   // ---------- История сообщества ----------
   chatEvents: (chatKey) => request(`/chats/${encodeURIComponent(chatKey)}/events`),
 

@@ -5,7 +5,7 @@ import CallManager, { GroupCallManager } from './webrtc.js'
 import ServerSetup from './components/ServerSetup.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
 import CallOverlay from './components/CallOverlay.jsx'
-import { JournalModal, PhoneSearchModal, GroupCallModal, GroupCallOverlay } from './components/NewFeatures.jsx'
+import { JournalModal, PhoneSearchModal, UsernameSearchModal, GroupCallModal, GroupCallOverlay } from './components/NewFeatures.jsx'
 import { Lightbox } from './components/MediaMessage.jsx'
 import {
   AttachMenu,
@@ -176,9 +176,10 @@ export default function App() {
   const [storyComposer, setStoryComposer] = useState(false)
   const [busyIds, setBusyIds] = useState(new Set())
 
-  // История сообщества, поиск по номеру, приглашения, групповой звонок
+  // История сообщений, поиск по номеру, приглашения, групповой звонок
   const [journalOpen, setJournalOpen] = useState(false)
   const [phoneSearchOpen, setPhoneSearchOpen] = useState(false)
+  const [usernameSearchOpen, setUsernameSearchOpen] = useState(false)
   const [groupCallModal, setGroupCallModal] = useState(false)
   const [groupCall, setGroupCall] = useState(null)     // { state, peers, local, video, callId, micOn, camOn }
   const [gcBanner, setGcBanner] = useState(null)       // активный звонок в открытом чате, к которому можно присоединиться
@@ -1531,6 +1532,7 @@ export default function App() {
           onNewGroup={() => { setNewChatOpen(false); setGroupOpen('group') }}
           onNewChannel={() => { setNewChatOpen(false); setGroupOpen('channel') }}
           onPhoneSearch={() => setPhoneSearchOpen(true)}
+          onUsernameSearch={() => setUsernameSearchOpen(true)}
           onClose={() => setNewChatOpen(false)}
         />
       )}
@@ -1578,6 +1580,13 @@ export default function App() {
           users={directory}
           onClose={() => setPhoneSearchOpen(false)}
           onPick={(u) => { setPhoneSearchOpen(false); setNewChatOpen(false); startChat(u.id) }}
+        />
+      )}
+
+      {usernameSearchOpen && (
+        <UsernameSearchModal
+          onClose={() => setUsernameSearchOpen(false)}
+          onPick={(u) => { setUsernameSearchOpen(false); setNewChatOpen(false); startChat(u.id) }}
         />
       )}
 

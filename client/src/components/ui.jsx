@@ -1029,7 +1029,7 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
 
 /* ==================== МОДАЛКА «НОВЫЙ ЧАТ» С ВКЛАДКАМИ ==================== */
 
-export function NewChatModal({ users, onPick, onNewGroup, onNewChannel, discover, onJoin, onClose, busyIds, onPhoneSearch }) {
+export function NewChatModal({ users, onPick, onNewGroup, onNewChannel, discover, onJoin, onClose, busyIds, onPhoneSearch, onUsernameSearch }) {
   const [tab, setTab] = useState('private') // private | public
   const [q, setQ] = useState('')
   const [found, setFound] = useState(null)
@@ -1081,6 +1081,11 @@ export function NewChatModal({ users, onPick, onNewGroup, onNewChannel, discover
               {onPhoneSearch && (
                 <button className="new-group-btn wide" onClick={onPhoneSearch}>
                   <IconSearch width={20} height={20} /> Найти по номеру телефона
+                </button>
+              )}
+              {onUsernameSearch && (
+                <button className="new-group-btn wide" onClick={onUsernameSearch}>
+                  <IconSearch width={20} height={20} /> Найти по @username
                 </button>
               )}
               <div className="picker-list">

@@ -3535,6 +3535,30 @@ textarea {
   margin-top: 2px;
 }
 
+/* В поиске по @username под именем показывается сам хэндл */
+.result-username {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Список похожих хэндлов, когда точного совпадения нет */
+.result-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+
+.result-candidates .hint {
+  margin-bottom: 2px;
+}
+
+.result-candidates .result-box.user {
+  text-align: left;
+}
+
 /* ==================== РАДИО-ТОЧКА (выбор формата звонка) ==================== */
 .switch-row .radio-dot {
   width: 20px;

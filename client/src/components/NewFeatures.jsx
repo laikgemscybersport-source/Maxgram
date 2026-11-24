@@ -114,6 +114,88 @@ export function JournalModal({ chat, onClose }) {
   )
 }
 
+/* ==================== ПОИСК ПО @username ====================
+   Точное совпадение хэндла даёт одного пользователя, частичное — список
+   похожих. Скрытые (privacy=invisible) сервер не возвращает вообще. */
+export function UsernameSearchModal({ onPick, onClose }) {
+  const [query, setQuery] = useState('')
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSearch = async () => {
+    const handle = query.replace(/^@/, '').trim()
+    if (handle.length < 4) return
+    setLoading(true)
+    try {
+      const d = await api.lookupUsername(handle)
+      setResult(d)
+    } catch (e) { /* toast */ } finally { setLoading(false) }
+  }
+
+  const card = (body) => (
+    <>
+      <div className="backdrop" onClick={onClose} style={{ zIndex: 21 }} />
+      <div className="modal-card" style={{ zIndex: 22 }}>
+        <div className="modal-head">
+          <button className="icon-btn" onClick={onClose}><IconArrowLeft /></button>
+          <h2>Поиск по @username</h2>
+        </div>
+        <div className="modal-body">{body}</div>
+      </div>
+    </>
+  )
+
+  if (result?.found) {
+    return card(result.is_self ? (
+      <div className="result-box self">Это вы</div>
+    ) : (
+      <button className="result-box user" onClick={() => { onPick(result.user); onClose() }}>
+        <Avatar user={result.user} size="lg" ring={false} />
+        <div className="result-info">
+          <div className="result-name">{result.user.name}</div>
+          <div className="result-username">@{result.username}</div>
+        </div>
+      </button>
+    ))
+  }
+
+  const candidates = result?.candidates || []
+  return card(
+    <>
+      <div className="field">
+        <input
+          className="search-input"
+          placeholder="@username"
+          autoComplete="off"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value.replace(/[^a-zA-Z0-9_@]/g, '')); setResult(null) }}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+        />
+      </div>
+      <button className="auth-primary" onClick={handleSearch} disabled={loading || query.replace(/^@/, '').trim().length < 4}>
+        {loading ? 'Ищу…' : 'Найти'}
+      </button>
+      {result && !result.found && candidates.length > 0 && (
+        <div className="result-box not-found result-candidates">
+          <div className="hint">Точного совпадения @{result.username} нет. Похожи:</div>
+          {candidates.map((u) => (
+            <button key={u.id} className="result-box user" onClick={() => { onPick(u); onClose() }}>
+              <Avatar user={u} size="sm" ring={false} />
+              <div className="result-info">
+                <div className="result-name">{u.name}</div>
+                <div className="result-username">@{u.username}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {result && !result.found && candidates.length === 0 && (
+        <div className="result-box not-found">Пользователь @{result.username} не найден</div>
+      )}
+    </>
+  )
+}
+
 /* ==================== ПОИСК ПО НОМЕРУ ТЕЛЕФОНА ==================== */
 export function PhoneSearchModal({ users, onPick, onClose }) {
   const [phone, setPhone] = useState('')

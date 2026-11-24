@@ -34,6 +34,9 @@ const checks = [
   ['oauth: Яндекс/VK/OK убраны', !/oauth\.yandex|oauth\.vk|oauth\.ok/.test(configSrc)],
   // Секреты не должны попасть в сборку: их читает только secrets.js вне asar
   ['oauth: секретных ключей в архиве нет', !serverSrc.includes('GOCSPX-') && !configSrc.includes('GOCSPX-')],
+  // Поиск по @username (эндпоинт + модалка)
+  ['поиск по username: эндпоинт', serverSrc.includes('lookup-username')],
+  ['поиск по username: модалка в бандле', src.includes('lookup-username')],
 ];
 
 let failed = 0;
