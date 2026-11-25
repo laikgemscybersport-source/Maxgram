@@ -552,6 +552,99 @@ async function login(phone, profile) {
   ok('удалённую историю не найти', stDelAgain.status === 404);
   ok('событие story_new доставлено по ws', !!stEv || true);
 
+  // 30. Список чатов: у нового пользователя нет демо-аккаунтов
+  const nbPhone = '+7999' + String(Date.now()).slice(-7);
+  const newbie = await login(nbPhone, { name: 'Новичок Автотест', username: 'newbie' + String(Date.now()).slice(-6) });
+  const nbChats = await req('/api/users/' + newbie.user.id + '/chats', {}, newbie.token);
+  ok('новый пользователь авторизован', nbChats.status === 200 && Array.isArray(nbChats.body));
+  const nbDm = nbChats.body.filter((c) => !c.is_group && !c.is_channel && !c.is_self);
+  ok('личных диалогов с демо-аккаунтами нет', nbDm.length === 0, 'found ' + nbDm.length + ': ' + nbDm.map((c) => c.user.name).join(','));
+  ok('Избранное при этом есть', nbChats.body.some((c) => c.key === 's:' + newbie.user.id));
+  const nbPublic = nbChats.body.filter((c) => c.is_channel);
+  ok('публичные каналы видны', nbPublic.length >= 2, 'found ' + nbPublic.length);
+
+  // 31. Личный диалог создаётся явно
+  const noDirect = await req('/api/direct', { method: 'POST', body: JSON.stringify({ user_id: 'нет-такого' }) }, newbie.token);
+  ok('несуществующий собеседник -> 404', noDirect.status === 404);
+  const selfDirect = await req('/api/direct', { method: 'POST', body: JSON.stringify({ user_id: newbie.user.id }) }, newbie.token);
+  ok('себе написать нельзя -> 400', selfDirect.status === 400);
+  const direct = await req('/api/direct', { method: 'POST', body: JSON.stringify({ user_id: 'u2' }) }, newbie.token);
+  const directKey = 'p:' + ['u2', newbie.user.id].sort().join(',');
+  ok('POST /api/direct создаёт диалог', direct.status === 200 && direct.body.chat_key === directKey, JSON.stringify(direct.body));
+  const nbChats2 = await req('/api/users/' + newbie.user.id + '/chats', {}, newbie.token);
+  ok('диалог появился в списке', nbChats2.body.some((c) => c.key === directKey));
+  const directAgain = await req('/api/direct', { method: 'POST', body: JSON.stringify({ user_id: 'u2' }) }, newbie.token);
+  ok('повторный direct идемпотентен', directAgain.status === 200 && directAgain.body.chat_key === directKey);
+  const directMsg = await req('/api/messages', { method: 'POST', body: JSON.stringify({ chat_key: directKey, content: 'первое сообщение' }) }, newbie.token);
+  ok('в созданный диалог можно писать', directMsg.status === 200 && directMsg.body.sender_id === newbie.user.id);
+
+  // 32. Управление группой: участники, админы, аватар, выход
+  const u4 = await login('+79994567890');
+  const u5 = await login('+79995678901');
+  const mg = await req('/api/groups', { method: 'POST', body: JSON.stringify({ name: 'Управляемая', members: ['u3'] }) }, u1.token);
+  const mgKey = 'g:' + mg.body.id;
+  ok('группа для теста управления создана', mg.status === 200 && mg.body.members.length === 2);
+  ok('аватар группы изначально null', mg.body.avatar === null);
+  const addMembers = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ members: ['u3', 'u4', 'u5'] }) }, u1.token);
+  ok('админ добавляет участников', addMembers.status === 200 && ['u1', 'u3', 'u4', 'u5'].every((m) => addMembers.body.members.includes(m)), JSON.stringify(addMembers.body.members));
+  ok('исключённый теряет доступ', !addMembers.body.members.includes('u2'));
+  const addAdmins = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ admins: ['u3', 'u4'] }) }, u1.token);
+  ok('назначены админы, владелец остался', addAdmins.status === 200 && ['u1', 'u3', 'u4'].every((m) => addAdmins.body.admins.includes(m)), JSON.stringify(addAdmins.body.admins));
+  ok('простой участник не стал админом', !addAdmins.body.admins.includes('u5'));
+  const adminRights = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ name: 'Переименовал админ' }) }, u3.token);
+  ok('рядовой админ редактирует группу', adminRights.status === 200 && adminRights.body.name === 'Переименовал админ');
+  const outsiderAdmin = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ admins: ['u5'] }) }, u5.token);
+  ok('участник без прав не меняет админов', outsiderAdmin.status === 403);
+  const kickAdmin = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ members: ['u3', 'u5'] }) }, u1.token);
+  ok('исключённый админ слетает с должности', kickAdmin.status === 200 && !kickAdmin.body.members.includes('u4') && !kickAdmin.body.admins.includes('u4'), JSON.stringify(kickAdmin.body.admins));
+  const kickedEdit = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ name: 'после исключения' }) }, u4.token);
+  ok('исключённый больше не редактирует группу', kickedEdit.status === 403);
+  const avatarNoFile = await req('/api/groups/' + mg.body.id + '/avatar', { method: 'POST', body: '{}' }, u3.token);
+  ok('аватар группы без фото -> 400', avatarNoFile.status === 400);
+  const noAccessAvatar = await req('/api/groups/' + mg.body.id + '/avatar', { method: 'POST', body: '{}' }, u2.token);
+  ok('не-участник не ставит аватар группы', noAccessAvatar.status === 403);
+  const mgAvatarForm = new FormData();
+  mgAvatarForm.append('photo', new Blob(['avatar-bytes'], { type: 'image/png' }), 'g.png');
+  const mgAvatar = await fetch(BASE + '/api/groups/' + mg.body.id + '/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + u1.token }, body: mgAvatarForm });
+  const mgAvatarBody = await mgAvatar.json().catch(() => null);
+  ok('аватар группы загружается', mgAvatar.status === 200 && /^\/uploads\/u1\//.test(mgAvatarBody?.avatar || ''), JSON.stringify(mgAvatarBody));
+  const mgSummary = await req('/api/users/u3/chats', {}, u3.token);
+  const mgRow = mgSummary.body.find((c) => c.key === mgKey);
+  ok('сводка группы несёт аватар и админов', mgRow?.user.avatar === mgAvatarBody.avatar && Array.isArray(mgRow.user.admins) && mgRow.user.admins.includes('u3'), JSON.stringify(mgRow?.user?.avatar));
+  ok('владелец помечен в сводке u1', (await req('/api/users/u1/chats', {}, u1.token)).body.find((c) => c.key === mgKey)?.is_owner === true);
+  ok('админ-участник не владелец', mgRow.is_admin === true && mgRow.is_owner === false);
+  const u5Row = (await req('/api/users/u5/chats', {}, u5.token)).body.find((c) => c.key === mgKey);
+  ok('у простого участника нет прав', u5Row && u5Row.is_admin === false && u5Row.is_owner === false);
+  const mgEvents = await req('/api/chats/' + encodeURIComponent(mgKey) + '/events', {}, u1.token);
+  ok('журнал группы пополнился', mgEvents.status === 200 && mgEvents.body.events.some((e) => e.type === 'added') && mgEvents.body.events.some((e) => e.type === 'removed'));
+  const ownerLeave = await req('/api/groups/' + mg.body.id + '/leave', { method: 'POST', body: '{}' }, u1.token);
+  ok('владелец не может выйти -> 400', ownerLeave.status === 400);
+  const memberLeave = await req('/api/groups/' + mg.body.id + '/leave', { method: 'POST', body: '{}' }, u3.token);
+  ok('участник выходит из группы', memberLeave.status === 200);
+  const u3AfterLeave = await req('/api/users/u3/chats', {}, u3.token);
+  ok('группа исчезла у вышедшего', !u3AfterLeave.body.some((c) => c.key === mgKey));
+
+  // 33. Управление каналом: подписчики, админы, адрес
+  const mc = await req('/api/channels', { method: 'POST', body: JSON.stringify({ name: 'Управляемый канал', is_public: false }) }, u1.token);
+  const mcKey = 'c:' + mc.body.id;
+  const chanMembers = await req('/api/channels/' + mc.body.id, { method: 'PUT', body: JSON.stringify({ members: ['u3', 'u4'] }) }, u1.token);
+  ok('админ добавляет подписчиков', chanMembers.status === 200 && ['u1', 'u3', 'u4'].every((m) => chanMembers.body.members.includes(m)), JSON.stringify(chanMembers.body.members));
+  const chanAdmins = await req('/api/channels/' + mc.body.id, { method: 'PUT', body: JSON.stringify({ admins: ['u3'] }) }, u1.token);
+  ok('назначен админ канала', chanAdmins.status === 200 && chanAdmins.body.admins.includes('u3') && chanAdmins.body.admins.includes('u1'));
+  const chanPost = await req('/api/messages', { method: 'POST', body: JSON.stringify({ chat_key: mcKey, content: 'от админа канала' }) }, u3.token);
+  ok('новый админ канала публикует', chanPost.status === 200);
+  const chanMemberList = await req('/api/users/u4/chats', {}, u4.token);
+  const mcRow = chanMemberList.body.find((c) => c.key === mcKey);
+  ok('добавленный видит канал подписанным', mcRow?.subscribed === true && mcRow.is_admin === false);
+  const chanKick = await req('/api/channels/' + mc.body.id, { method: 'PUT', body: JSON.stringify({ members: ['u4'] }) }, u1.token);
+  ok('исключённый из канала теряет админство', chanKick.status === 200 && !chanKick.body.members.includes('u3') && !chanKick.body.admins.includes('u3'));
+  const chanHandle = await req('/api/channels/' + mc.body.id, { method: 'PUT', body: JSON.stringify({ handle: 'managed' + String(Date.now()).slice(-6) }) }, u1.token);
+  ok('админу можно сменить адрес канала', chanHandle.status === 200 && chanHandle.body.is_public === true);
+  const chanDup = await req('/api/channels/' + mc.body.id, { method: 'PUT', body: JSON.stringify({ handle: 'maxgram_news' }) }, u1.token);
+  ok('занятый адрес канала -> 409', chanDup.status === 409);
+  const groupHandleDup = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ handle: 'maxgram_team' }) }, u1.token);
+  ok('занятый адрес группы -> 409', groupHandleDup.status === 409);
+
   a.ws.close();
   b.ws.close();
   cu6.ws.close();

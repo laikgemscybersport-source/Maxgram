@@ -67,8 +67,8 @@ for (const a of DEMO_ACCOUNTS) {
   };
 }
 
-groups.g1 = { id: 'g1', name: 'Команда MAXgram', handle: 'maxgram_team', description: 'Рабочая чаты команды', members: ['u1', 'u2', 'u3', 'u4', 'u5'], admins: ['u1'], owner: 'u1', is_public: true, created_at: daysAgoIso(30) };
-groups.g2 = { id: 'g2', name: '🚀 Проекты', handle: null, description: '', members: ['u1', 'u2', 'u4'], admins: ['u1'], owner: 'u1', is_public: false, created_at: daysAgoIso(20) };
+groups.g1 = { id: 'g1', name: 'Команда MAXgram', handle: 'maxgram_team', description: 'Рабочая чаты команды', avatar: null, members: ['u1', 'u2', 'u3', 'u4', 'u5'], admins: ['u1'], owner: 'u1', is_public: true, created_at: daysAgoIso(30) };
+groups.g2 = { id: 'g2', name: '🚀 Проекты', handle: null, description: '', avatar: null, members: ['u1', 'u2', 'u4'], admins: ['u1'], owner: 'u1', is_public: false, created_at: daysAgoIso(20) };
 
 channels.c1 = { id: 'c1', name: 'Новости MAXgram', handle: 'maxgram_news', description: 'Анонсы, релизы и советы по мессенджеру', avatar: null, owner: 'u1', admins: ['u1', 'u2'], members: ['u1', 'u2', 'u3', 'u4', 'u5'], is_public: true, created_at: daysAgoIso(40) };
 channels.c2 = { id: 'c2', name: 'Закрытый клуб', handle: null, description: 'Только для своих', avatar: null, owner: 'u2', admins: ['u2'], members: ['u1', 'u2', 'u4'], is_public: false, created_at: daysAgoIso(10) };
@@ -449,10 +449,10 @@ function previewText(m) {
   return PREVIEW[m.kind] || m.content || '';
 }
 
-function memberPreview(ids) {
+function memberPreview(ids, admins) {
   return ids.slice(0, 12).map((id) => {
     const u = users[id];
-    return u ? { id: u.id, name: u.name, avatar: u.avatar, online: isOnline(u.id) } : null;
+    return u ? { id: u.id, name: u.name, avatar: u.avatar, online: isOnline(u.id), admin: !!admins && admins.includes(id) } : null;
   }).filter(Boolean);
 }
 
@@ -507,6 +507,7 @@ function chatSummary(key, meId) {
       handle: g.handle,
       can_post: true,
       is_admin: isAdmin(meId, key),
+      is_owner: g.owner === meId,
       user: {
         id: g.id,
         name: g.name,
@@ -515,8 +516,10 @@ function chatSummary(key, meId) {
         username: g.handle,
         bio: g.description || 'Групповой чат',
         members: g.members,
-        members_preview: memberPreview(g.members),
-        avatar: null,
+        members_preview: memberPreview(g.members, g.admins),
+        admins: g.admins || [],
+        owner: g.owner,
+        avatar: g.avatar || null,
         online: false,
         presence: '',
         is_public: !!g.is_public,
@@ -543,6 +546,7 @@ function chatSummary(key, meId) {
       subscribed: member,
       can_post: isAdmin(meId, key),
       is_admin: isAdmin(meId, key),
+      is_owner: c.owner === meId,
       user: {
         id: c.id,
         name: c.name,
@@ -551,7 +555,9 @@ function chatSummary(key, meId) {
         username: c.handle,
         bio: c.description,
         members: c.members,
-        members_preview: memberPreview(c.admins || []),
+        members_preview: memberPreview(c.members, c.admins),
+        admins: c.admins || [],
+        owner: c.owner,
         avatar: c.avatar,
         online: false,
         presence: '',
@@ -594,9 +600,10 @@ function chatKeysFor(meId) {
       if (membersOf(key).includes(meId)) keys.add(key);
     }
   }
-  for (const id of Object.keys(users)) {
-    if (id !== meId) keys.add(pairKey(meId, id));
-  }
+  // Личные диалоги берём только из реально существующих переписок. Раньше сюда
+  // добавлялся каждый пользователь базы — из-за этого новенький человек видел у
+  // себя в списке чатов все демо-аккаунты, хотя ни с кем не говорил.
+  // Диалог появляется сам: отправка сообщения создаёт chats['p:…'].
   for (const cid of Object.keys(channels)) {
     const c = channels[cid];
     if (c.is_public) keys.add(channelKey(cid));
@@ -1699,6 +1706,7 @@ app.post('/api/groups', auth, (req, res) => {
     name: title,
     handle: handle || null,
     description: String(req.body.description || '').slice(0, 200),
+    avatar: null,
     members,
     admins: [req.userId],
     owner: req.userId,
@@ -1727,16 +1735,38 @@ app.put('/api/groups/:id', auth, (req, res) => {
     g.is_public = req.body.is_public;
     g.handle = req.body.is_public ? normalizeHandle(req.body.handle) || g.handle : null;
   }
+  // Адрес можно поставить или сменить и когда группа уже публичная.
+  // Без проверки уникальности здесь легко было получить два одинаковых @handle.
+  const wantHandle = 'handle' in req.body ? normalizeHandle(req.body.handle) : null;
+  if (wantHandle) {
+    const taken = Object.entries(groups).some(([id, x]) => id !== g.id && x.handle === wantHandle)
+      || Object.values(channels).some((x) => x.handle === wantHandle);
+    if (taken) return res.status(409).json({ error: 'Такой адрес уже занят' });
+    g.handle = wantHandle;
+    g.is_public = true;
+  }
   if (Array.isArray(req.body.members)) {
     const next = Array.from(new Set([g.owner, ...req.body.members.filter((m) => users[m])]));
     const added = next.filter((m) => !g.members.includes(m));
     const removed = g.members.filter((m) => !next.includes(m));
     g.members = next;
+    // Исключённый не должен оставаться в админах
+    g.admins = (g.admins || []).filter((m) => g.members.includes(m));
     for (const m of added) logEvent(key, 'added', req.userId, `${eventActor(req.userId)} пригласил(а) ${eventActor(m)}`);
     for (const m of removed) logEvent(key, 'removed', req.userId, `${eventActor(req.userId)} исключил(а) ${eventActor(m)}`);
+    // Выгнанный участник уже не входит в membersOf, поэтому событие
+    // 'chat_updated' до него не дойдёт и чат висел бы у него в списке до
+    // перезагрузки. Отправляем ему отдельно.
+    if (removed.includes(req.userId)) removed.splice(removed.indexOf(req.userId), 1);
+    broadcastTo(removed, { type: 'chat_updated', chat_key: key });
   }
   if (Array.isArray(req.body.admins)) {
     g.admins = Array.from(new Set([g.owner, ...req.body.admins.filter((m) => g.members.includes(m))]));
+    logEvent(key, 'admins', req.userId, `${eventActor(req.userId)} обновил(а) список администраторов`);
+  }
+  if (typeof req.body.avatar === 'string' || req.body.avatar === null) {
+    g.avatar = req.body.avatar;
+    logEvent(key, 'avatar', req.userId, `${eventActor(req.userId)} обновил(а) фото группы`);
   }
   broadcastTo(membersOf(key), { type: 'chat_updated', chat_key: key });
   res.json({ ...g });
@@ -1795,6 +1825,37 @@ app.put('/api/channels/:id', auth, (req, res) => {
       return res.status(409).json({ error: 'Такой адрес уже занят' });
     }
   }
+  const wantHandle = 'handle' in req.body ? normalizeHandle(req.body.handle) : null;
+  if (wantHandle) {
+    const taken = Object.entries(channels).some(([id, x]) => id !== c.id && x.handle === wantHandle)
+      || Object.values(groups).some((x) => x.handle === wantHandle);
+    if (taken) return res.status(409).json({ error: 'Такой адрес уже занят' });
+    c.handle = wantHandle;
+    c.is_public = true;
+  }
+  if (Array.isArray(req.body.members)) {
+    // Владелец остаётся в канале всегда, остальные — ровно как прислал админ.
+    // Админы, которых исключили, автоматически теряют права (ниже).
+    const next = Array.from(new Set([c.owner, ...req.body.members.filter((m) => users[m])]));
+    const added = next.filter((m) => !c.members.includes(m));
+    const removed = c.members.filter((m) => !next.includes(m));
+    c.members = next;
+    c.admins = c.admins.filter((m) => c.members.includes(m));
+    for (const m of added) logEvent(key, 'added', req.userId, `${eventActor(req.userId)} добавил(а) ${eventActor(m)} в подписчики`);
+    for (const m of removed) logEvent(key, 'removed', req.userId, `${eventActor(req.userId)} отписал(а) ${eventActor(m)}`);
+    // Список чатов вышедшего обновится только по этому событию: membersOf его
+    // больше не содержит, поэтому общий broadcastTo до него не доходит.
+    if (removed.includes(req.userId)) removed.splice(removed.indexOf(req.userId), 1);
+    broadcastTo(removed, { type: 'chat_updated', chat_key: key });
+  }
+  if (Array.isArray(req.body.admins)) {
+    c.admins = Array.from(new Set([c.owner, ...req.body.admins.filter((m) => c.members.includes(m))]));
+    logEvent(key, 'admins', req.userId, `${eventActor(req.userId)} обновил(а) список администраторов`);
+  }
+  if (typeof req.body.avatar === 'string' || req.body.avatar === null) {
+    c.avatar = req.body.avatar;
+    logEvent(key, 'avatar', req.userId, `${eventActor(req.userId)} обновил(а) фото канала`);
+  }
   broadcastTo(membersOf(key), { type: 'chat_updated', chat_key: key });
   res.json({ ...c });
 });
@@ -1836,14 +1897,56 @@ app.post('/api/groups/:id/join', auth, (req, res) => {
   res.json({ ...g, members_count: g.members.length });
 });
 
+// Выйти из группы может любой участник, кроме владельца: без этого частную
+// группу нельзя было покинуть вообще (ссылка-приглашение только добавляет).
+app.post('/api/groups/:id/leave', auth, (req, res) => {
+  const g = groups[req.params.id];
+  if (!g) return res.status(404).json({ error: 'Группа не найдена' });
+  if (g.owner === req.userId) return res.status(400).json({ error: 'Владелец не может выйти — передайте группу или удалите её' });
+  if (g.members.includes(req.userId)) {
+    logEvent(groupKey(g.id), 'left', req.userId, `${eventActor(req.userId)} покинул(а) группу`);
+  }
+  g.members = g.members.filter((id) => id !== req.userId);
+  g.admins = (g.admins || []).filter((id) => id !== req.userId);
+  broadcastTo(membersOf(groupKey(g.id)), { type: 'chat_updated', chat_key: groupKey(g.id) });
+  res.json({ ok: true });
+});
+
 app.post('/api/channels/:id/avatar', auth, upload.single('photo'), (req, res) => {
   const c = channels[req.params.id];
   if (!c) return res.status(404).json({ error: 'Канал не найден' });
   if (!isAdmin(req.userId, channelKey(c.id))) return res.status(403).json({ error: 'Только администраторы' });
   if (!req.file) return res.status(400).json({ error: 'Фото не получено' });
   c.avatar = `/uploads/${req.userId}/${req.file.filename}`;
+  logEvent(channelKey(c.id), 'avatar', req.userId, `${eventActor(req.userId)} обновил(а) фото канала`);
   broadcastTo(membersOf(channelKey(c.id)), { type: 'chat_updated', chat_key: channelKey(c.id) });
   res.json({ ...c });
+});
+
+app.post('/api/groups/:id/avatar', auth, upload.single('photo'), (req, res) => {
+  const g = groups[req.params.id];
+  if (!g) return res.status(404).json({ error: 'Группа не найдена' });
+  const key = groupKey(g.id);
+  if (!isAdmin(req.userId, key)) return res.status(403).json({ error: 'Только администраторы' });
+  if (!req.file) return res.status(400).json({ error: 'Фото не получено' });
+  g.avatar = `/uploads/${req.userId}/${req.file.filename}`;
+  logEvent(key, 'avatar', req.userId, `${eventActor(req.userId)} обновил(а) фото группы`);
+  broadcastTo(membersOf(key), { type: 'chat_updated', chat_key: key });
+  res.json({ ...g });
+});
+
+/* ---------- Личный диалог ----------
+   Список чатов строится по фактическим перепискам, поэтому диалог с человеком,
+   которому ещё не написали, сервер не отдаёт. Кнопка «Написать» создаёт пустой
+   чат явно — он сразу появляется в списке, как в Telegram. */
+app.post('/api/direct', auth, (req, res) => {
+  const peerId = String(req.body.user_id || req.body.peer_id || '');
+  const peer = users[peerId];
+  if (!peer) return res.status(404).json({ error: 'Пользователь не найден' });
+  if (peerId === req.userId) return res.status(400).json({ error: 'Себе написать нельзя — есть Избранное' });
+  const key = pairKey(req.userId, peerId);
+  if (!chats[key]) chats[key] = [];
+  res.json({ chat_key: key, chat: chatSummary(key, req.userId) });
 });
 
 /* ---------- Поиск и каталог публичного ---------- */

@@ -32,11 +32,12 @@ export async function listDevices() {
 
 export const byKind = (list, kind) => (list || []).filter((d) => d.kind === kind)
 
-// Название устройства по deviceId (пустая строка, если не выбрано/не найдено).
-// list — уже отфильтрованный массив нужного kind.
-export function deviceName(list, id) {
-  if (!id) return ''
-  return (list || []).find((d) => d.deviceId === id)?.label || ''
+// Название устройства по deviceId. list — уже отфильтрованный массив нужного
+// kind. Если ничего не выбрано или устройство пропало, возвращаем fallback,
+// чтобы подпись рядом со стрелкой не была пустой.
+export function deviceName(list, id, fallback = '') {
+  if (!id) return fallback
+  return (list || []).find((d) => d.deviceId === id)?.label || fallback
 }
 
 // getUserMedia отклоняет deviceId.exact для неизвестного устройства (наушники

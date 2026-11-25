@@ -131,6 +131,16 @@ export const api = {
   createGroup: (payload) => request('/groups', { method: 'POST', body: JSON.stringify(payload) }),
   updateGroup: (id, payload) => request(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   joinGroup: (id) => request(`/groups/${id}/join`, { method: 'POST', body: '{}' }),
+  leaveGroup: (id) => request(`/groups/${id}/leave`, { method: 'POST', body: '{}' }),
+  uploadGroupAvatar: (id, file) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return request(`/groups/${id}/avatar`, { method: 'POST', body: fd });
+  },
+
+  // Диалог «с нуля»: без него чат с человеком появляется в списке только после
+  // первого отправленного сообщения.
+  createDirect: (userId) => request('/direct', { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
 
   createChannel: (payload) => request('/channels', { method: 'POST', body: JSON.stringify(payload) }),
   updateChannel: (id, payload) => request(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),

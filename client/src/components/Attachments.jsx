@@ -95,7 +95,7 @@ export function CircleRecorder({ onCancel, onDone }) {
   const rec = useRef(null)
   const tick = useRef(null)
 
-  const { mics, cameras } = useDeviceList()
+  const { mics, cameras, refresh } = useDeviceList()
 
   const killStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -111,9 +111,6 @@ export function CircleRecorder({ onCancel, onDone }) {
         : 'Браузер не поддерживает видеозапись')
       return
     }
-    navigator.mediaDevices.enumerateDevices()
-      .then((ds) => setHasMany(ds.filter((d) => d.kind === 'videoinput').length > 1))
-      .catch(() => {})
     return () => {
       clearInterval(tick.current)
       if (rec.current) rec.current.cancel()
@@ -121,30 +118,32 @@ export function CircleRecorder({ onCancel, onDone }) {
     }
   }, [])
 
-  // Камера открывается один раз при монтировании и остаётся открытой всю сессию:
-  // тот же поток показывает себя в круге и пишется MediaRecorder'ом. Переоткрытие
-  // на ПК давало чёрный круг и NotReadableError (камера ещё не освобождена).
-  // facingMode применяется только когда камера не выбрана явно — иначе они
-  // конфликтуют и getUserMedia падает на ПК с одной веб-камерой.
+  // facingMode применяется только когда камера выбрана явно — иначе они
+  // конфликтуют и getUserMedia падает на ПК с одной веб-камерой. Список
+  // перечитывается на месте: state-`cameras` в момент первого вызова ещё пуст.
   const openCam = useCallback(async () => {
     const devices = await listDevices()
-    const picked = camId() && cameras.some((d) => d.deviceId === camId())
+    const want = camId()
+    const picked = want && devices.some((d) => d.kind === 'videoinput' && d.deviceId === want)
     return navigator.mediaDevices.getUserMedia({
       video: {
         width: { ideal: 640 },
         height: { ideal: 640 },
-        ...(picked ? { deviceId: { exact: camId() } }
+        ...(picked ? { deviceId: { exact: want } }
           : { facingMode: camIdx === 0 ? 'user' : 'environment' }),
       },
       audio: audioConstraints(devices),
     })
-  }, [camIdx, cameras])
+  }, [camIdx])
 
+  // Камера открывается один раз при монтировании и остаётся открытой всю сессию:
+  // тот же поток показывает себя в круге и пишется MediaRecorder'ом. Переоткрытие
+  // на ПК давало чёрный круг и NotReadableError (камера ещё не освобождена).
   useEffect(() => {
     if (!canRecord()) return
     let alive = true
     setReady(false)
-    openCam().then((stream) => {
+    openCam().then(async (stream) => {
       if (!alive) { stream.getTracks().forEach((t) => t.stop()); return }
       streamRef.current = stream
       if (videoRef.current) {
@@ -152,6 +151,14 @@ export function CircleRecorder({ onCancel, onDone }) {
         videoRef.current.play?.().catch(() => {})
       }
       setReady(true)
+      // До получения доступа браузер отдаёт устройства с пустыми deviceId и без
+      // label — список в пикере был пустым и выбрать веб-камеру было нельзя.
+      const ds = await refresh()
+      const cams = ds.filter((d) => d.kind === 'videoinput')
+      setHasMany(cams.length > 1)
+      // Если сохранённая камера исчезла (отключили), снимаем выбор, иначе
+      // каждое следующее открытие падало бы на deviceId.exact.
+      if (camId() && !cams.some((d) => d.deviceId === camId())) setCamId('')
     }).catch((e) => {
       if (!alive) return
       setErr(e?.name === 'NotAllowedError' ? 'Разрешите доступ к камере' : 'Камера недоступна')
@@ -161,20 +168,37 @@ export function CircleRecorder({ onCancel, onDone }) {
       // Во время записи поток принадлежит MediaRecorder — не трогаем его.
       if (!recordingRef.current) killStream()
     }
-  }, [openCam])
+  }, [openCam, refresh])
 
   // Смена устройства во время показа предпросмотра: пересобираем поток.
   const switchTo = async () => {
     if (recordingRef.current) return
     killStream()
+    setErr('')
     setReady(false)
     try {
       const stream = await openCam()
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play?.().catch(() => {})
+      }
       setReady(true)
-    } catch {
-      setErr('Камера недоступна')
+    } catch (e) {
+      // Выбранная камера могла быть занята другим приложением — возвращаемся к
+      // системной, иначе круг остаётся чёрным до перезахода в рекордер.
+      setCamId('')
+      try {
+        const stream = await openCam()
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play?.().catch(() => {})
+        }
+        setReady(true)
+      } catch {
+        setErr(e?.name === 'NotAllowedError' ? 'Разрешите доступ к камере' : 'Камера недоступна')
+      }
     }
   }
 

@@ -8,7 +8,7 @@ import {
   IconSelect, IconMega, IconEye, IconEyeOff, IconMoon2, IconBellOff, IconWallpaper,
   IconExport, IconBroom, IconPlus, IconLock, IconGlobe, IconStory, IconCheckCircle,
   IconPencil2, IconDownload, IconPlay, IconPause, IconPhoto,
-  IconHistory, IconPhoneGroup,
+  IconHistory, IconPhoneGroup, IconSettings,
 } from './Icons.jsx'
 import { AudioBubble, MediaBubble, FileBubble, LocationBubble, ContactBubble, EventBubble, CallBubble } from './MediaMessage.jsx'
 
@@ -862,7 +862,7 @@ const PRESENCE_OPTIONS = [
   { k: 'invisible', label: 'Невидимка', hint: 'Никто не увидит ваш статус и время последнего входа', icon: <IconEyeOff width={20} height={20} /> },
 ]
 
-export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar, onCall, onVideo, onMessage, onFavorites }) {
+export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar, onCall, onVideo, onMessage, onFavorites, onManage, onLeave }) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ name: peer?.name || '', prefix: peer?.prefix || '', username: peer?.username || '', bio: peer?.bio || '' })
   const [privacy, setPrivacy] = useState(peer?.privacy || 'visible')
@@ -995,16 +995,31 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
                 {peer.bio && <div className="profile-row"><div><div className="value">{peer.bio}</div><div className="label">Описание</div></div></div>}
                 {peer.members_preview?.length > 0 && (
                   <>
-                    <div className="hint-line">{peer.is_channel ? 'Администраторы' : 'Участники'}</div>
+                    <div className="hint-line">{peer.is_channel ? 'Подписчики' : 'Участники'}</div>
                     <div className="member-row">
                       {peer.members_preview.map((m) => (
                         <div key={m.id} className="member-chip">
                           <Avatar user={m} size="sm" ring={false} online={m.online} />
                           <span>{m.name.split(' ')[0]}</span>
+                          {m.admin && <IconCheckCircle width={13} height={13} className="chip-admin" />}
                         </div>
                       ))}
                     </div>
                   </>
+                )}
+                {(onManage || onLeave) && (
+                  <div className="profile-actions">
+                    {onManage && (
+                      <button onClick={onManage}>
+                        <IconSettings width={18} height={18} /> {peer.is_channel ? 'Настройки канала' : 'Настройки группы'}
+                      </button>
+                    )}
+                    {onLeave && (
+                      <button className="danger" onClick={onLeave}>
+                        <IconLogout width={18} height={18} /> {peer.is_channel ? 'Отписаться' : 'Выйти'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -1277,6 +1292,7 @@ export function ChatMenu({ chat, onClose, onAction, settings }) {
     { k: 'no_copy', label: settings?.no_copy ? 'Разрешить копирование' : 'Запретить копирование', icon: settings?.no_copy ? <IconEye width={19} height={19} /> : <IconLock width={19} height={19} />, on: settings?.no_copy },
     { k: 'mute', label: settings?.muted ? 'Включить уведомления' : 'Отключить уведомления', icon: settings?.muted ? <IconBellOff width={19} height={19} /> : <IconChats width={19} height={19} />, on: settings?.muted },
     ...(isCommunity ? [{ k: 'group_call', label: 'Групповой звонок', icon: <IconPhoneGroup width={19} height={19} /> }] : []),
+    ...(isCommunity ? [{ k: 'manage', label: chat?.is_channel ? 'Настройки канала' : 'Настройки группы', icon: <IconSettings width={19} height={19} /> }] : []),
     ...(isCommunity ? [{ k: 'journal', label: 'История сообщества', icon: <IconHistory width={19} height={19} /> }] : []),
     { k: 'export', label: 'Экспорт истории', icon: <IconExport width={19} height={19} /> },
     { k: 'profile', label: chat?.is_channel ? 'О канале' : chat?.is_group ? 'О группе' : 'Профиль', icon: <IconContacts width={19} height={19} /> },
@@ -1423,6 +1439,210 @@ export function ForwardModal({ chats, messages, onClose, onSend }) {
           <button className="auth-primary" disabled={!picked.length} onClick={() => { onSend(picked); onClose() }}>
             <IconForward width={18} height={18} /> Переслать ({picked.length})
           </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ==================== УПРАВЛЕНИЕ ГРУППОЙ / КАНАЛОМ ====================
+   Одна модалка на оба типа сообществ: название, описание, адрес, фото,
+   участники и администраторы. Различия — только в формулировках: право
+   публиковать в канале ограничивает сервер. */
+
+export function CommunityModal({ chat, users, meId, onClose, onSave, onAvatar }) {
+  const info = chat?.user || {}
+  const isChannel = !!chat?.is_channel
+  const can = !!chat?.is_admin
+  const owner = info.owner || meId
+  const word = isChannel ? 'подписчика' : 'участника'
+  const bio = info.bio === 'Групповой чат' ? '' : (info.bio || '')
+
+  const [name, setName] = useState(info.name || '')
+  const [desc, setDesc] = useState(bio)
+  const [pub, setPub] = useState(!!chat?.is_public)
+  const [handle, setHandle] = useState(info.username || '')
+  const [members, setMembers] = useState(info.members || [meId])
+  const [admins, setAdmins] = useState(info.admins || [owner])
+  const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef(null)
+
+  const byId = (id) => users.find((x) => x.id === id)
+  // Владелец и админы — наверху, остальные по алфавиту
+  const ordered = [...members].sort((a, b) => {
+    const rank = (id) => (id === owner ? 0 : admins.includes(id) ? 1 : 2)
+    return rank(a) - rank(b) || (byId(a)?.name || '').localeCompare(byId(b)?.name || '')
+  })
+  const needle = q.trim().toLowerCase().replace(/^@/, '')
+  const addable = users
+    .filter((u) => u.id !== meId && !members.includes(u.id))
+    .filter((u) => !needle || (u.name || '').toLowerCase().includes(needle) || (u.username || '').toLowerCase().includes(needle))
+    .slice(0, 12)
+
+  const toggleAdmin = (id) => {
+    if (!can || id === owner) return
+    setAdmins((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]))
+  }
+  const kick = (id) => {
+    if (!can || id === owner) return
+    setMembers((m) => m.filter((x) => x !== id))
+    setAdmins((a) => a.filter((x) => x !== id))
+  }
+  const invite = (id) => setMembers((m) => (m.includes(id) ? m : [...m, id]))
+
+  const dirty = name.trim() !== (info.name || '')
+    || desc.trim() !== bio
+    || pub !== !!chat?.is_public
+    || (handle || '') !== (info.username || '')
+    || members.length !== (info.members || []).length
+    || members.some((m) => !(info.members || []).includes(m))
+    || admins.length !== (info.admins || []).length
+    || admins.some((a) => !(info.admins || []).includes(a))
+
+  const save = async () => {
+    if (!name.trim() || busy) return
+    if (pub && handle.replace(/[^a-z0-9_]/g, '').length < 4) return
+    setBusy(true)
+    const ok = await onSave({
+      name: name.trim(),
+      description: desc.trim(),
+      is_public: pub,
+      handle: pub ? handle : null,
+      members,
+      admins,
+    })
+    setBusy(false)
+    if (ok) onClose()
+  }
+
+  return (
+    <>
+      <div className="backdrop" onClick={onClose} style={{ zIndex: 19 }} />
+      <div className="modal-card community-modal" style={{ zIndex: 20 }}>
+        <div className="modal-head">
+          <h2>{isChannel ? 'Настройки канала' : 'Настройки группы'}</h2>
+          <button className="icon-btn" onClick={onClose}><IconClose /></button>
+        </div>
+        <div className="modal-body">
+          {!can && (
+            <div className="cm-notice">
+              <IconLock width={16} height={16} />
+              <span>Изменять могут только владелец и администраторы — всё остальное только для чтения.</span>
+            </div>
+          )}
+
+          <div className="cm-avatar-wrap">
+            <Avatar user={info} size="xl" ring={false} />
+            {can && (
+              <>
+                <button className="avatar-cam" onClick={() => fileRef.current?.click()} title="Сменить фото сообщества">
+                  <IconCamera />
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) onAvatar(f)
+                    e.target.value = ''
+                  }}
+                />
+              </>
+            )}
+          </div>
+
+          <div className="field">
+            <label>{isChannel ? 'Название канала' : 'Название группы'}</label>
+            <input className="search-input" style={{ paddingLeft: 14 }} value={name} maxLength={40} disabled={!can}
+              onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Описание</label>
+            <textarea className="search-input" style={{ paddingLeft: 14, resize: 'vertical' }} rows={2} maxLength={200}
+              disabled={!can} value={desc} placeholder={isChannel ? 'О чём этот канал' : 'Зачем эта группа'}
+              onChange={(e) => setDesc(e.target.value)} />
+          </div>
+
+          <button className="switch-row" disabled={!can} onClick={() => setPub((v) => !v)}>
+            {pub ? <IconGlobe width={20} height={20} /> : <IconLock width={20} height={20} />}
+            <div>
+              <div className="name">{pub ? 'Публичное' : 'Частное'}</div>
+              <div className="hint">{pub ? 'Находится в каталоге и находится по адресу' : 'Доступ только по приглашению участников'}</div>
+            </div>
+            <span className={`switch ${pub ? 'on' : ''}`} />
+          </button>
+
+          {pub && (
+            <div className="field">
+              <label>Публичный адрес</label>
+              <div className="username-wrap">
+                <span>@</span>
+                <input className="search-input" value={handle} maxLength={32} disabled={!can} placeholder="my_channel"
+                  onChange={(e) => setHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())} />
+              </div>
+              <div className="hint" style={{ marginTop: 4 }}>от 4 символов: латиница, цифры, _</div>
+            </div>
+          )}
+
+          <div className="hint-line">{isChannel ? 'Подписчики' : 'Участники'} ({members.length})</div>
+          <div className="cm-members">
+            {ordered.map((id) => {
+              const u = byId(id)
+              const isOwner = id === owner
+              const isAdminRow = admins.includes(id) || isOwner
+              return (
+                <div key={id} className="cm-member">
+                  <Avatar user={u || { id, name: id }} size="sm" ring={false} />
+                  <div className="cm-member-name">
+                    {u ? displayNameOf(u) : 'Неизвестный'}
+                    {id === meId && <span className="cm-you">вы</span>}
+                  </div>
+                  {isAdminRow && <span className={`cm-badge ${isOwner ? 'owner' : ''}`}>{isOwner ? 'владелец' : 'админ'}</span>}
+                  {can && !isOwner && (
+                    <>
+                      <button className="cm-act" title={admins.includes(id) ? 'Снять администратора' : 'Сделать администратором'}
+                        onClick={() => toggleAdmin(id)}>
+                        {admins.includes(id) ? <IconCheckCircle width={18} height={18} /> : <IconUserPlus width={18} height={18} />}
+                      </button>
+                      <button className="cm-act danger" title={isChannel ? 'Отписать' : 'Исключить'} onClick={() => kick(id)}>
+                        <IconClose width={16} height={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {can && (
+            <div className="field">
+              <label>Добавить {word}</label>
+              <div className="search-wrap" style={{ marginBottom: 6 }}>
+                <IconSearch />
+                <input className="search-input" placeholder="Имя или @username" value={q} onChange={(e) => setQ(e.target.value)} />
+              </div>
+              <div className="cm-add-list">
+                {addable.map((u) => (
+                  <button key={u.id} className="cm-add-item" onClick={() => invite(u.id)}>
+                    <Avatar user={u} size="sm" ring={false} />
+                    <span className="name">{displayNameOf(u)}</span>
+                    <IconPlus width={16} height={16} />
+                  </button>
+                ))}
+                {!addable.length && <div className="empty-hint">{needle ? 'Никого не нашлось' : 'Все уже добавлены'}</div>}
+              </div>
+            </div>
+          )}
+
+          {can && (
+            <button className="auth-primary" disabled={!dirty || !name.trim() || busy} onClick={save}>
+              {busy ? 'Сохраняем…' : 'Сохранить изменения'}
+            </button>
+          )}
         </div>
       </div>
     </>

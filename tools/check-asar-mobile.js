@@ -37,6 +37,15 @@ const checks = [
   // Поиск по @username (эндпоинт + модалка)
   ['поиск по username: эндпоинт', serverSrc.includes('lookup-username')],
   ['поиск по username: модалка в бандле', src.includes('lookup-username')],
+  // Список чатов: демо-аккаунты больше не добавляются автоматически
+  ['чаты: автодиалоги по всем юзерам убраны', !serverSrc.includes('keys.add(pairKey(meId, id))')],
+  ['чаты: /api/direct на сервере', serverSrc.includes('/api/direct')],
+  ['чаты: /api/direct в клиенте', src.includes('/direct')],
+  // Управление группами и каналами
+  ['сообщества: аватар группы', serverSrc.includes('/api/groups/:id/avatar')],
+  ['сообщества: выход из группы', serverSrc.includes('/api/groups/:id/leave')],
+  ['сообщества: модалка настроек', src.includes('community-modal')],
+  ['сообщества: пункты настроек', src.includes('Настройки канала') && src.includes('Настройки группы')],
 ];
 
 let failed = 0;

@@ -24,6 +24,7 @@ import {
   ProfilePanel,
   NewChatModal,
   GroupModal,
+  CommunityModal,
   ConfirmModal,
   MessageMenu,
   SelectionBar,
@@ -180,6 +181,8 @@ export default function App() {
   const [journalOpen, setJournalOpen] = useState(false)
   const [phoneSearchOpen, setPhoneSearchOpen] = useState(false)
   const [usernameSearchOpen, setUsernameSearchOpen] = useState(false)
+  const [communityOpen, setCommunityOpen] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const [groupCallModal, setGroupCallModal] = useState(false)
   const [groupCall, setGroupCall] = useState(null)     // { state, peers, local, video, callId, micOn, camOn }
   const [gcBanner, setGcBanner] = useState(null)       // активный звонок в открытом чате, к которому можно присоединиться
@@ -1100,6 +1103,7 @@ export default function App() {
       case 'export': setExportOpen(true); break
       case 'profile': if (chat?.is_self || chat?.is_channel || chat?.is_group) setProfilePeer(true); else setProfilePeer(true); break
       case 'journal': setChatMenuOpen(false); setJournalOpen(true); break
+      case 'manage': setChatMenuOpen(false); setCommunityOpen(true); break
       case 'group_call': setChatMenuOpen(false); setGroupCallModal(true); break
       case 'clear': setConfirmClear(true); break
       case 'delete': setConfirmDeleteChat(true); break
@@ -1133,13 +1137,68 @@ export default function App() {
     }
   }
 
+  /* ---------- Настройки группы / канала ---------- */
+
+  const saveCommunity = async (payload) => {
+    const chat = chatsRef.current.find((c) => c.key === activeRef.current)
+    if (!chat) return false
+    try {
+      if (chat.is_channel) await api.updateChannel(chat.user.id, payload)
+      else await api.updateGroup(chat.user.id, payload)
+      await loadChats(user.id)
+      toast('Сохранено')
+      return true
+    } catch (e) {
+      toast(e.message || 'Не удалось сохранить')
+      return false
+    }
+  }
+
+  const saveCommunityAvatar = async (file) => {
+    const chat = chatsRef.current.find((c) => c.key === activeRef.current)
+    if (!chat) return
+    try {
+      const prepared = await compressImage(file, 640, 0.85)
+      if (chat.is_channel) await api.uploadChannelAvatar(chat.user.id, prepared)
+      else await api.uploadGroupAvatar(chat.user.id, prepared)
+      await loadChats(user.id)
+      toast('Фото обновлено')
+    } catch (e) {
+      toast(e.message || 'Фото не загружено')
+    }
+  }
+
+  const leaveCommunity = async () => {
+    const chat = chatsRef.current.find((c) => c.key === activeRef.current)
+    if (!chat) return
+    try {
+      if (chat.is_channel) await api.leaveChannel(chat.user.id)
+      else await api.leaveGroup(chat.user.id)
+      setActiveKey(null)
+      activeRef.current = null
+      setView('list')
+      await loadChats(user.id)
+      toast(chat.is_channel ? 'Вы отписались от канала' : 'Вы вышли из группы')
+    } catch (e) {
+      toast(e.message || 'Не удалось выйти')
+    }
+  }
+
   const startChat = (peerId) => {
     setNewChatOpen(false)
     setContactOpen(false)
     setProfilePeer(false)
     const me = userRef.current
     if (!me) return
-    selectChat(pairKey(me.id, peerId))
+    const key = pairKey(me.id, peerId)
+    // Список чатов сервер строит по реальным перепискам, поэтому диалог с тем,
+    // кому ещё не писали, надо создать явно — иначе он не появился бы в списке.
+    if (!chatsRef.current.some((c) => c.key === key)) {
+      api.createDirect(peerId)
+        .then(() => loadChats(me.id))
+        .catch(() => {})
+    }
+    selectChat(key)
   }
 
   const createdChat = async (payload, kind) => {
@@ -1184,10 +1243,8 @@ export default function App() {
   const openContact = (userId) => {
     const found = directoryRef.current.find((u) => u.id === userId)
     if (!found) return toast('Контакт больше недоступен')
-    const me = userRef.current
-    activeRef.current = pairKey(me.id, userId)
-    setProfilePeer(false)
-    selectChat(pairKey(me.id, userId))
+    // startChat сам создаёт пустой диалог через /api/direct
+    startChat(userId)
   }
 
   const subscribe = async () => {
@@ -1519,6 +1576,23 @@ export default function App() {
           onCall={() => { setProfilePeer(false); startCall(false) }}
           onVideo={() => { setProfilePeer(false); startCall(true) }}
           onMessage={() => setProfilePeer(false)}
+          onManage={(isGroup || isChannel) && activeChat?.is_admin
+            ? () => { setProfilePeer(false); setCommunityOpen(true) } : undefined}
+          onLeave={(isGroup || isChannel) && !activeChat?.is_owner && activeChat?.subscribed !== false
+            ? () => { setProfilePeer(false); setConfirmLeave(true) } : undefined}
+        />
+      )}
+
+      {confirmLeave && (
+        <ConfirmModal
+          title={isChannel ? 'Отписаться от канала?' : 'Выйти из группы?'}
+          text={isChannel
+            ? 'Вы перестанете получать публикации этого канала.'
+            : `Вы выйдете из «${displayNameOf(peer)}». Вернуться можно только по приглашению.`}
+          confirmLabel={isChannel ? 'Отписаться' : 'Выйти'}
+          danger
+          onConfirm={leaveCommunity}
+          onClose={() => setConfirmLeave(false)}
         />
       )}
 
@@ -1573,6 +1647,17 @@ export default function App() {
 
       {journalOpen && activeChat && (
         <JournalModal chat={activeChat} onClose={() => setJournalOpen(false)} />
+      )}
+
+      {communityOpen && activeChat && (
+        <CommunityModal
+          chat={activeChat}
+          users={directory}
+          meId={user.id}
+          onClose={() => setCommunityOpen(false)}
+          onSave={saveCommunity}
+          onAvatar={saveCommunityAvatar}
+        />
       )}
 
       {phoneSearchOpen && (

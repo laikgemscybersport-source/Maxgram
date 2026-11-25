@@ -4214,6 +4214,155 @@ textarea {
   color: var(--text-secondary);
 }
 
+/* ==================== УПРАВЛЕНИЕ ГРУППОЙ / КАНАЛОМ ==================== */
+
+.community-modal {
+  width: min(460px, 94vw);
+}
+
+.community-modal .modal-body {
+  max-height: 76vh;
+}
+
+.cm-avatar-wrap {
+  position: relative;
+  width: fit-content;
+  margin: 4px auto 14px;
+}
+
+.cm-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-sidebar);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 12px;
+}
+
+.cm-members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 34vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.cm-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
+}
+
+.cm-member:hover {
+  background: var(--bg-hover);
+}
+
+.cm-member-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-you {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.cm-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(51, 144, 236, .14);
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.cm-badge.owner {
+  color: #f0a500;
+  background: rgba(240, 165, 0, .16);
+}
+
+.cm-act {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.cm-act:hover {
+  background: var(--bg-sidebar);
+  color: var(--accent);
+}
+
+.cm-act.danger:hover {
+  color: #e5534b;
+  background: rgba(229, 83, 75, .12);
+}
+
+.cm-add-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+
+.cm-add-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  text-align: left;
+}
+
+.cm-add-item:hover {
+  background: var(--bg-hover);
+}
+
+.cm-add-item .name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-add-item svg:last-child {
+  color: var(--accent);
+}
+
+.profile-actions button.danger {
+  color: #e5534b;
+}
+
+.profile-actions button.danger:hover {
+  background: rgba(229, 83, 75, .12);
+}
+
+.chip-admin {
+  color: var(--accent);
+}
+
 
 
 
