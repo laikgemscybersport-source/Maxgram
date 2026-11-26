@@ -25,6 +25,29 @@ export function colorFor(id) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
+// Пара цветов для градиентного кольца истории. В десктопном Telegram у каждого
+// автора своё сочетание, поэтому лента читается целиком, а не «все одинаковые».
+// Пары намеренно контрастные: в десктопном Telegram кольцо читается как
+// градиент с заметным переливом, а не как ровная заливка.
+const STORY_RINGS = [
+  ['#ff516a', '#ff9a3c'],
+  ['#3d8bfd', '#43d6f5'],
+  ['#2bb673', '#8ee36b'],
+  ['#7b5cff', '#c86bff'],
+  ['#ff7a2f', '#ffd54f'],
+  ['#e04cf0', '#ff6b9d'],
+  ['#25b8c9', '#3d8bfd'],
+  ['#f06292', '#ff8a65'],
+  ['#5b8dff', '#a35cff'],
+  ['#ffb300', '#ff516a'],
+]
+
+export function ringColorsFor(id) {
+  let h = 0
+  for (let i = 0; i < (id || 'x').length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return STORY_RINGS[h % STORY_RINGS.length]
+}
+
 export function initials(name) {
   const clean = (name || '?').replace(/[^\p{L}\p{N}\s]/gu, '').trim()
   const parts = clean.split(/\s+/)
@@ -499,12 +522,15 @@ export function ChatHeader({ peer, statusText, typing, onBack, onInfo, onCall, o
 
 export function StoriesBar({ groups, meId, onOpen, onAdd }) {
   if (!groups?.length && !meId) return null
+  const mineGroup = meId ? groups?.find((g) => g.user.id === meId) : null
   return (
     <div className="stories">
-      {meId && (
-        <button className="story mine" onClick={onAdd}>
+      {/* Свой круг показываем один раз: если история уже есть, «+» живёт на нём,
+          иначе остаётся пустая кнопка добавления — как в десктопном Telegram. */}
+      {meId && !mineGroup && (
+        <button className="story mine" onClick={onAdd} title="Добавить историю">
           <div className="story-ring add">
-            <Avatar user={{ id: 'me-story' }} size="sm" ring={false} />
+            <Avatar user={{ id: 'me-story' }} size="story" ring={false} />
             <span className="story-plus"><IconPlus width={13} height={13} /></span>
           </div>
           <span className="story-name">Ваша</span>
@@ -512,12 +538,36 @@ export function StoriesBar({ groups, meId, onOpen, onAdd }) {
       )}
       {groups.map((g) => {
         const seen = g.items.every((s) => s.seen)
+        const mine = g.user.id === meId
+        // Кольцо своего цвета у каждого автора — как в десктопном Telegram,
+        // где по ним считывается, чья история уже просмотрена, а чья нет.
+        const [c1, c2] = ringColorsFor(g.user.id)
         return (
-          <button key={g.user.id} className="story" onClick={() => onOpen(g)}>
-            <div className={`story-ring ${seen ? 'seen' : ''}`}>
-              <Avatar user={g.user} size="sm" ring={false} />
+          <button
+            key={g.user.id}
+            className={`story ${seen ? 'seen' : ''} ${mine ? 'mine' : ''}`}
+            onClick={() => onOpen(g)}
+            title={mine ? 'Ваша история' : `История: ${shortNameOf(g.user)}`}
+          >
+            <div
+              className="story-ring"
+              style={seen ? undefined : { '--ring-a': c1, '--ring-b': c2 }}
+            >
+              <Avatar user={g.user} size="story" ring={false} />
+              {mine && (
+                <span
+                  className="story-plus"
+                  title="Добавить историю"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onAdd?.()
+                  }}
+                >
+                  <IconPlus width={13} height={13} />
+                </span>
+              )}
             </div>
-            <span className="story-name">{g.user.id === meId ? 'Вы' : shortNameOf(g.user)}</span>
+            <span className="story-name">{mine ? 'Вы' : shortNameOf(g.user)}</span>
           </button>
         )
       })}

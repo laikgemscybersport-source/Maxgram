@@ -46,6 +46,12 @@ const checks = [
   ['сообщества: выход из группы', serverSrc.includes('/api/groups/:id/leave')],
   ['сообщества: модалка настроек', src.includes('community-modal')],
   ['сообщества: пункты настроек', src.includes('Настройки канала') && src.includes('Настройки группы')],
+  // Лента историй: у каждого автора своё цветное кольцо, просмотренные гаснут.
+  // Имя функции минификатор сокращает, поэтому ищем сами цвета палитры.
+  ['истории: палитра колец в клиенте', src.includes('#ff516a') && src.includes('#c86bff')],
+  ['истории: кольцо-градиент', cssSrc.includes('--ring-a') && cssSrc.includes('linear-gradient(140deg')],
+  ['истории: просмотренное гаснет', cssSrc.includes('.story.seen')],
+  ['истории: демо-авторы на сервере', /stories\.u3\s*=/.test(serverSrc) && /stories\.u5\s*=/.test(serverSrc)],
 ];
 
 let failed = 0;

@@ -2388,6 +2388,23 @@ textarea {
     padding: 8px 10px;
   }
 
+  /* На телефоне лента компактнее — круги и имена меньше десктопных */
+  .story {
+    width: 62px;
+    gap: 4px;
+  }
+
+  .avatar.story {
+    width: 46px;
+    height: 46px;
+    font-size: 18px;
+  }
+
+  .story-name {
+    font-size: 11.5px;
+    max-width: 62px;
+  }
+
   .sel-bar {
     left: 8px;
     right: 8px;
@@ -2763,11 +2780,14 @@ textarea {
   background: rgba(255, 255, 255, 0.28);
 }
 
-/* ==================== ИСТОРИИ ==================== */
+/* ==================== ИСТОРИИ ====================
+   Лента как в десктопном Telegram: крупный круг, своё цветное кольцо у каждого
+   автора, имя под кругом. Кольцо рисуется padding'ом вокруг аватара, поэтому
+   градиент не залезает на фото. */
 .stories {
   display: flex;
-  gap: 10px;
-  padding: 8px 14px 10px;
+  gap: 12px;
+  padding: 10px 14px 12px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -2780,19 +2800,28 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  width: 62px;
+  gap: 5px;
+  width: 74px;
   flex-shrink: 0;
 }
 
 .story-ring {
   position: relative;
-  padding: 3px;
+  padding: 3.5px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3390ec, #7b68ee 45%, #f06292);
+  /* Линейный перелив по диагонали читается на маленьком круге заметнее, чем
+     conic-gradient: у него оба цвета видны одновременно. */
+  background: linear-gradient(140deg, var(--ring-a, #3d8bfd) 0%, var(--ring-b, #c86bff) 100%);
+  transition: transform 0.14s ease;
 }
 
-.story-ring.seen {
+.story:hover .story-ring {
+  transform: scale(1.04);
+}
+
+/* Просмотренное кольцо гаснет до нейтрального — так видно, что уже смотрели */
+.story-ring.seen,
+.story.seen .story-ring {
   background: var(--border);
 }
 
@@ -2801,7 +2830,13 @@ textarea {
 }
 
 .story-ring .avatar {
-  border: 2px solid var(--bg);
+  border: 2.5px solid var(--bg-sidebar);
+}
+
+.avatar.story {
+  width: 58px;
+  height: 58px;
+  font-size: 22px;
 }
 
 .story-plus {
@@ -2819,12 +2854,16 @@ textarea {
 }
 
 .story-name {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text);
-  max-width: 62px;
+  max-width: 74px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.story.seen .story-name {
+  color: var(--text-secondary);
 }
 
 .story-view {

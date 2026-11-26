@@ -141,12 +141,23 @@ seed('c:c2', [
 // Закреплённое сообщение в канале — чтобы было видно механизм
 pins['c:c1'] = { message_id: chats['c:c1'][2].id, by_id: 'u1', at: hoursAgo(11) };
 
-// Демо-истории (живут 24 часа)
+// Демо-истории (живут 24 часа). Их несколько авторов: лента должна выглядеть
+// так же, как в десктопном Telegram, где сразу видно несколько колец.
 stories.u2 = [
   { id: uuidv4(), author_id: 'u2', kind: 'text', media: null, caption: 'Утро ☀️ Вёрстка списка чатов почти готова', created_at: hoursAgo(2), expires: Date.now() + 22 * 3600 * 1000, views: [] },
+  { id: uuidv4(), author_id: 'u2', kind: 'text', media: null, caption: 'А ещё починила превью вложений 📎', created_at: hoursAgo(1), expires: Date.now() + 23 * 3600 * 1000, views: [] },
+];
+stories.u3 = [
+  { id: uuidv4(), author_id: 'u3', kind: 'text', media: null, caption: 'Закрыл баг #1234 🎉', created_at: hoursAgo(3), expires: Date.now() + 21 * 3600 * 1000, views: [] },
 ];
 stories.u4 = [
   { id: uuidv4(), author_id: 'u4', kind: 'text', media: null, caption: 'Кто хочет на созвон в 19:00? 🎧', created_at: hoursAgo(5), expires: Date.now() + 19 * 3600 * 1000, views: ['u1'] },
+];
+stories.u5 = [
+  { id: uuidv4(), author_id: 'u5', kind: 'text', media: null, caption: 'Релиз в пятницу — держим кулаки 🚀', created_at: hoursAgo(6), expires: Date.now() + 18 * 3600 * 1000, views: [] },
+];
+stories.u1 = [
+  { id: uuidv4(), author_id: 'u1', kind: 'text', media: null, caption: 'Собираем MAXgram: звонки, истории, каналы', created_at: hoursAgo(4), expires: Date.now() + 20 * 3600 * 1000, views: [] },
 ];
 
 /* ==================== СОХРАНЕНИЕ НА ДИСК ====================
