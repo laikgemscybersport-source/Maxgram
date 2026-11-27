@@ -39,6 +39,7 @@
       "server.js",
       "config.js",
       "package.json",
+      "tools/cert.js",
       "electron/**/*",
       "client/dist/**/*",
       "!electron/build/*.png",

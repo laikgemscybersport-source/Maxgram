@@ -58,6 +58,8 @@ const checks = [
   ['телефон: тумблер в клиенте', src.includes('hide_phone')],
   // HTTPS для камеры и звонков на других устройствах
   ['https: генератор сертификата', serverSrc.includes('ensureCert') && serverSrc.includes("require('./tools/cert')")],
+  // Сам модуль обязан лежать в архиве, иначе приложение падает на старте
+  ['https: tools/cert.js в архиве', list.some((p) => /[\\/]tools[\\/]cert\.js$/.test(p))],
   ['https: адреса сети на сервере', serverSrc.includes('/api/netinfo')],
   ['https: экран «Доступ по сети»', src.includes('netinfo') && cssSrc.includes('net-card')],
 ];
