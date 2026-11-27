@@ -868,7 +868,7 @@ export { previewOf }
 
 /* ==================== МЕНЮ ==================== */
 
-export function Drawer({ me, chats, onClose, onLogout, onNewGroup, onNewChannel, onProfile, theme, onTheme }) {
+export function Drawer({ me, chats, onClose, onLogout, onNewGroup, onNewChannel, onProfile, theme, onTheme, onNet }) {
   const unread = chats.reduce((s, c) => s + (c.unread || 0), 0)
   return (
     <>
@@ -892,6 +892,9 @@ export function Drawer({ me, chats, onClose, onLogout, onNewGroup, onNewChannel,
           <button className="drawer-item" onClick={onProfile}>
             <IconContacts width={22} height={22} /> Мой профиль
           </button>
+          <button className="drawer-item" onClick={onNet}>
+            <IconGlobe width={22} height={22} /> Доступ по сети
+          </button>
           <button className="drawer-item" onClick={onTheme}>
             {theme === 'dark' ? <IconSun width={22} height={22} /> : <IconMoon width={22} height={22} />}
             {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
@@ -912,24 +915,26 @@ const PRESENCE_OPTIONS = [
   { k: 'invisible', label: 'Невидимка', hint: 'Никто не увидит ваш статус и время последнего входа', icon: <IconEyeOff width={20} height={20} /> },
 ]
 
-export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar, onCall, onVideo, onMessage, onFavorites, onManage, onLeave }) {
+export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar, onCall, onVideo, onMessage, onFavorites, onManage, onLeave, onNet }) {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ name: peer?.name || '', prefix: peer?.prefix || '', username: peer?.username || '', bio: peer?.bio || '' })
   const [privacy, setPrivacy] = useState(peer?.privacy || 'visible')
   const [dnd, setDnd] = useState(!!peer?.dnd)
+  const [hidePhone, setHidePhone] = useState(!!peer?.hide_phone)
   const fileRef = useRef(null)
 
   useEffect(() => {
     setForm({ name: peer?.name || '', prefix: peer?.prefix || '', username: peer?.username || '', bio: peer?.bio || '' })
     setPrivacy(peer?.privacy || 'visible')
     setDnd(!!peer?.dnd)
+    setHidePhone(!!peer?.hide_phone)
     setEdit(false)
   }, [peer?.id])
 
   if (!peer) return null
 
   const save = async () => {
-    await onSave({ ...form, privacy, dnd })
+    await onSave({ ...form, privacy, dnd, hide_phone: hidePhone })
     setEdit(false)
   }
 
@@ -1014,6 +1019,21 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
               <span className={`switch ${dnd ? 'on' : ''}`} />
             </button>
 
+            {/* Номер скрывается не только в карточке: сервер перестаёт отдавать
+                его в /api/users и не находит владельца поиском по номеру. */}
+            <button className="switch-row" onClick={() => setHidePhone((v) => !v)}>
+              <IconEyeOff width={20} height={20} />
+              <div>
+                <div className="name">Скрывать номер телефона</div>
+                <div className="hint">
+                  {hidePhone
+                    ? 'Другие видят «номер скрыт» и не найдут вас по номеру'
+                    : 'Номер виден всем, кто открыл ваш профиль'}
+                </div>
+              </div>
+              <span className={`switch ${hidePhone ? 'on' : ''}`} />
+            </button>
+
             <button className="auth-primary" onClick={save}>Сохранить</button>
           </div>
         ) : (
@@ -1022,7 +1042,9 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
             <div className="profile-sub">{statusText}</div>
             {!peer.is_group && !peer.is_self && !peer.is_channel && (
               <>
-                {peer.phone && <div className="profile-row"><div><div className="value">{peer.phone}</div><div className="label">Телефон</div></div></div>}
+                {peer.phone_hidden
+                  ? <div className="profile-row"><div><div className="value">номер скрыт</div><div className="label">Телефон</div></div></div>
+                  : peer.phone && <div className="profile-row"><div><div className="value">{peer.phone}</div><div className="label">Телефон</div></div></div>}
                 {peer.username && <div className="profile-row"><div><div className="value">@{peer.username}</div><div className="label">Имя пользователя</div></div></div>}
                 {peer.bio && <div className="profile-row"><div><div className="value">{peer.bio}</div><div className="label">О себе</div></div></div>}
                 {peer.provider && peer.provider !== 'phone' && (
@@ -1076,11 +1098,19 @@ export function ProfilePanel({ peer, statusText, isMe, onClose, onSave, onAvatar
             {peer.is_self && (
               <>
                 <div className="profile-row"><div><div className="value">{peer.phone}</div><div className="label">Телефон</div></div></div>
+                {peer.hide_phone && (
+                  <div className="profile-row"><div><div className="value">скрыт от других</div><div className="label">Номер</div></div></div>
+                )}
                 {peer.username && <div className="profile-row"><div><div className="value">@{peer.username}</div><div className="label">Имя пользователя</div></div></div>}
                 {peer.bio && <div className="profile-row"><div><div className="value">{peer.bio}</div><div className="label">О себе</div></div></div>}
                 {onFavorites && (
                   <div className="profile-actions">
                     <button onClick={onFavorites}><IconBookmark width={18} height={18} /> Избранное</button>
+                  </div>
+                )}
+                {onNet && (
+                  <div className="profile-actions">
+                    <button onClick={onNet}><IconGlobe width={18} height={18} /> Доступ по сети</button>
                   </div>
                 )}
               </>

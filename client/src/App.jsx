@@ -3,6 +3,7 @@ import { api, getToken, setToken, connectSocket, mediaUrl, getServerBase, isNati
 import { compressImage } from './media'
 import CallManager, { GroupCallManager } from './webrtc.js'
 import ServerSetup from './components/ServerSetup.jsx'
+import NetworkInfo from './components/NetworkInfo.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
 import CallOverlay from './components/CallOverlay.jsx'
 import { JournalModal, PhoneSearchModal, UsernameSearchModal, GroupCallModal, GroupCallOverlay } from './components/NewFeatures.jsx'
@@ -147,6 +148,7 @@ export default function App() {
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [profileMe, setProfileMe] = useState(false)
+  const [netOpen, setNetOpen] = useState(false)
   const [profilePeer, setProfilePeer] = useState(false)
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [groupOpen, setGroupOpen] = useState(null)   // 'group' | 'channel'
@@ -1547,6 +1549,7 @@ export default function App() {
           onNewGroup={() => { setDrawerOpen(false); setGroupOpen('group') }}
           onNewChannel={() => { setDrawerOpen(false); setGroupOpen('channel') }}
           onProfile={() => setProfileMe(true)}
+          onNet={() => { setDrawerOpen(false); setNetOpen(true) }}
           theme={theme}
           onTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         />
@@ -1560,6 +1563,7 @@ export default function App() {
           onClose={() => setProfileMe(false)}
           onSave={saveProfile}
           onAvatar={saveAvatar}
+          onNet={() => { setProfileMe(false); setNetOpen(true) }}
           onFavorites={() => {
             setProfileMe(false)
             const key = 's:' + user.id
@@ -1567,6 +1571,8 @@ export default function App() {
           }}
         />
       )}
+
+      {netOpen && <NetworkInfo onClose={() => setNetOpen(false)} />}
 
       {profilePeer && peer && (
         <ProfilePanel

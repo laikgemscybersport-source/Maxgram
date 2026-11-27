@@ -112,6 +112,8 @@ export const api = {
   },
   providers: () => request('/auth/providers'),
   oauthStart: (provider) => request(`/auth/${provider}/start`),
+  // Адреса этого сервера в локальной сети — для экрана «Доступ по сети».
+  netinfo: () => request('/netinfo'),
 
   // ---------- Данные ----------
   getUsers: () => request('/users'),

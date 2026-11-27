@@ -52,6 +52,14 @@ const checks = [
   ['истории: кольцо-градиент', cssSrc.includes('--ring-a') && cssSrc.includes('linear-gradient(140deg')],
   ['истории: просмотренное гаснет', cssSrc.includes('.story.seen')],
   ['истории: демо-авторы на сервере', /stories\.u3\s*=/.test(serverSrc) && /stories\.u5\s*=/.test(serverSrc)],
+  // Скрытие номера телефона: флаг в профиле, маскировка для чужих, запрет поиска
+  ['телефон: флаг hide_phone на сервере', serverSrc.includes('hide_phone')],
+  ['телефон: маскировка phone_hidden', serverSrc.includes('phone_hidden')],
+  ['телефон: тумблер в клиенте', src.includes('hide_phone')],
+  // HTTPS для камеры и звонков на других устройствах
+  ['https: генератор сертификата', serverSrc.includes('ensureCert') && serverSrc.includes("require('./tools/cert')")],
+  ['https: адреса сети на сервере', serverSrc.includes('/api/netinfo')],
+  ['https: экран «Доступ по сети»', src.includes('netinfo') && cssSrc.includes('net-card')],
 ];
 
 let failed = 0;

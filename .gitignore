@@ -43,3 +43,5 @@ bin/
 .DS_Store
 /desktop-out/
 desktop9/
+desktop10/
+certs/

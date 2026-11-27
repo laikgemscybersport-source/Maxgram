@@ -1,17 +1,29 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const { WebSocketServer } = require('ws');
 const cors = require('cors');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 // require('../config') уже чинит TLS для шлюза (см. комментарий в config.js)
 const config = require('./config');
+const { ensureCert, lanAddresses } = require('./tools/cert');
 
 const app = express();
 const server = http.createServer(app);
+
+// HTTPS поднимаем ВТОРЫМ портом, а не вместо HTTP: по http://localhost удобно
+// отлаживать и гонять тесты, а камера/микрофон браузер отдаёт только в
+// безопасном контексте — по адресу вида https://192.168.x.x:3443.
+// HTTPS=0 выключает, HTTPS_PORT задаёт порт.
+const HTTPS_ENABLED = String(process.env.HTTPS || '1') !== '0';
+const HTTPS_PORT = Number(process.env.HTTPS_PORT || 3443);
+let httpsServer = null;
+let httpsCertInfo = null;
 
 // Сервер почти всегда стоит за прокси (Nginx, Render, Cloudflare-туннель, десктоп).
 // Без trust proxy req.ip отдаёт адрес прокси, а req.secure всегда false —
@@ -290,7 +302,16 @@ function broadcast(payload, except) {
   }
 }
 
-const usersSnapshot = () => Object.values(users).map(publicUser);
+// Снимок пользователей маскируется по получателю: свой номер человек видит
+// всегда, чужой (если тот скрыт) — нет. Один общий payload тут не подходит.
+function broadcastUsers(except) {
+  for (const uid of sockets.keys()) {
+    if (uid === except) continue;
+    send(uid, { type: 'users', users: usersSnapshot(uid) });
+  }
+}
+
+const usersSnapshot = (meId) => Object.values(users).map((u) => publicUser(u, meId));
 
 /* ---------- Присутствие: в сети / только что / недавно / невидимка ---------- */
 
@@ -336,14 +357,20 @@ function displayName(u) {
   return u.prefix ? `${u.prefix} ${u.name}` : u.name;
 }
 
-function publicUser(u) {
+// hide_phone — личный тумблер владельца аккаунта. Владелец всегда видит свой
+// номер (privateUser), остальным он приходит пустым: иначе скрытие обходилось бы
+// простым разбором /api/users в консоли.
+function publicUser(u, meId) {
   const presence = presenceOf(u);
+  const own = !!meId && u.id === meId;
+  const hidePhone = !!u.hide_phone && !own;
   return {
     id: u.id,
     name: u.name,
     prefix: u.prefix || '',
     display_name: displayName(u),
-    phone: formatPhone(u.phone),
+    phone: hidePhone ? '' : formatPhone(u.phone),
+    phone_hidden: hidePhone,
     username: u.username,
     bio: u.bio,
     avatar: u.avatar,
@@ -357,7 +384,15 @@ function publicUser(u) {
 }
 
 function privateUser(u) {
-  return { ...publicUser(u), phone_raw: u.phone, email: u.email || null };
+  // Свой номер владелец видит всегда, даже если включил скрытие.
+  return {
+    ...publicUser(u, u.id),
+    phone: formatPhone(u.phone),
+    phone_hidden: !!u.hide_phone,
+    hide_phone: !!u.hide_phone,
+    phone_raw: u.phone,
+    email: u.email || null,
+  };
 }
 
 /* ---------- Настройки чата для пользователя ---------- */
@@ -591,7 +626,7 @@ function chatSummary(key, meId) {
     is_group: false,
     is_channel: false,
     can_post: true,
-    user: publicUser(other),
+    user: publicUser(other, meId),
     last_message: publicMessage(last, meId, key),
     preview_prefix: prefix,
     unread,
@@ -1097,6 +1132,7 @@ app.post('/api/auth/register', (req, res) => {
     oauth: {},
     email: null,
     privacy: 'visible',
+    hide_phone: false,
     dnd: false,
     last_seen: new Date().toISOString(),
   };
@@ -1104,7 +1140,7 @@ app.post('/api/auth/register', (req, res) => {
   // Личное «Избранное» для каждого нового аккаунта
   chats[selfKey(id)] = [];
 
-  broadcast({ type: 'users', users: usersSnapshot() });
+  broadcastUsers();
   res.json(issueSession(users[id]));
 });
 
@@ -1125,7 +1161,7 @@ app.post('/api/auth/logout', auth, (req, res) => {
 });
 
 app.put('/api/me', auth, (req, res) => {
-  const { name, bio, username, privacy, dnd, prefix } = req.body;
+  const { name, bio, username, privacy, dnd, prefix, hide_phone } = req.body;
   if (typeof name === 'string' && name.trim()) req.user.name = name.trim().slice(0, 40);
   if (typeof bio === 'string') req.user.bio = bio.slice(0, 140);
   if (typeof username === 'string') {
@@ -1136,15 +1172,16 @@ app.put('/api/me', auth, (req, res) => {
   }
   if (['visible', 'invisible'].includes(privacy)) req.user.privacy = privacy;
   if (typeof dnd === 'boolean') req.user.dnd = dnd;
+  if (typeof hide_phone === 'boolean') req.user.hide_phone = hide_phone;
   if (typeof prefix === 'string') req.user.prefix = normalizePrefix(prefix) || '';
-  broadcast({ type: 'users', users: usersSnapshot() });
+  broadcastUsers();
   res.json({ user: privateUser(req.user) });
 });
 
 app.post('/api/me/avatar', auth, upload.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Фото не получено' });
   req.user.avatar = `/uploads/${req.userId}/${req.file.filename}`;
-  broadcast({ type: 'users', users: usersSnapshot() });
+  broadcastUsers();
   res.json({ user: privateUser(req.user) });
 });
 
@@ -1227,6 +1264,7 @@ function createOAuthUser(provider, prof) {
     oauth: { [provider]: prof.pid },
     email: prof.email || null,
     privacy: 'visible',
+    hide_phone: false,
     dnd: false,
     last_seen: new Date().toISOString(),
   };
@@ -1261,6 +1299,26 @@ app.get('/api/health', (_req, res) => {
     groups: Object.keys(groups).length,
     sms_provider: config.sms.provider,
     sms_ready: gw.ready,
+    https: !!httpsServer,
+  });
+});
+
+/* Адреса, по которым этот сервер доступен другим устройствам сети.
+   Нужен экрану «Доступ по сети»: именно по https-адресу с этого списка
+   открываются камера и микрофон на телефоне или другом ПК. */
+app.get('/api/netinfo', auth, (req, res) => {
+  const port = server.address() ? server.address().port : Number(process.env.PORT || 3000);
+  const httpsPort = httpsServer && httpsServer.address() ? httpsServer.address().port : null;
+  const lan = lanAddresses();
+  res.json({
+    http_port: port,
+    https_port: httpsPort,
+    https_ready: !!httpsServer,
+    local_url: `http://localhost:${port}`,
+    lan_http: lan.map((ip) => `http://${ip}:${port}`),
+    lan_https: httpsPort ? lan.map((ip) => `https://${ip}:${httpsPort}`) : [],
+    public_url: config.publicUrlExplicit ? config.publicUrl : null,
+    secure_context: req.secure || String(req.get('x-forwarded-proto') || '').includes('https'),
   });
 });
 
@@ -1346,7 +1404,7 @@ app.get('/auth/:provider/callback', async (req, res) => {
     const prof = await exchangeOAuthCode(id, String(code), saved.redirect, saved.verifier);
     const user = findOAuthUser(id, prof);
     const session = issueSession(user);
-    broadcast({ type: 'users', users: usersSnapshot() });
+    broadcastUsers();
 
     res.type('html').send(
       '<meta charset="utf-8"><script>' +
@@ -1366,8 +1424,8 @@ function escapeHtml(s) {
 
 /* ==================== ЧАТЫ И СООБЩЕНИЯ ==================== */
 
-app.get('/api/users', auth, (_req, res) => {
-  res.json(usersSnapshot());
+app.get('/api/users', auth, (req, res) => {
+  res.json(usersSnapshot(req.userId));
 });
 
 app.get('/api/users/:id/chats', auth, (req, res) => {
@@ -1727,7 +1785,7 @@ app.post('/api/groups', auth, (req, res) => {
   chats[groupKey(id)] = [];
   logEvent(groupKey(id), 'created', req.userId, `${eventActor(req.userId)} создал(а) группу`);
 
-  broadcast({ type: 'users', users: usersSnapshot() });
+  broadcastUsers();
   res.json({ ...groups[id] });
 });
 
@@ -1814,7 +1872,7 @@ app.post('/api/channels', auth, (req, res) => {
   chats[channelKey(id)] = [];
   logEvent(channelKey(id), 'created', req.userId, `${eventActor(req.userId)} создал(а) канал`);
 
-  broadcast({ type: 'users', users: usersSnapshot() });
+  broadcastUsers();
   res.json({ ...channels[id] });
 });
 
@@ -2050,7 +2108,7 @@ app.get('/api/lookup-username', auth, (req, res) => {
     return res.json({
       found: true,
       username: handle,
-      user: publicUser(exact),
+      user: publicUser(exact, req.userId),
       chat_key: pairKey(req.userId, exact.id),
       is_self: exact.id === req.userId,
     });
@@ -2061,7 +2119,7 @@ app.get('/api/lookup-username', auth, (req, res) => {
     .filter((u) => visible(u) && u.id !== req.userId && u.username && u.username.includes(handle))
     .sort((a, b) => a.username.length - b.username.length || a.username.localeCompare(b.username))
     .slice(0, 12)
-    .map((u) => publicUser(u));
+    .map((u) => publicUser(u, req.userId));
 
   res.json({ found: false, username: handle, candidates });
 });
@@ -2074,10 +2132,14 @@ app.get('/api/lookup-phone', auth, (req, res) => {
   if (!found) return res.json({ found: false, phone: formatPhone(phone) });
   if (found.privacy === 'invisible') return res.json({ found: false, hidden: true, phone: formatPhone(phone) });
   const meId = req.userId;
+  // Скрытый номер нельзя найти и по вводу номера: иначе тумблер бесполезен.
+  if (found.hide_phone && found.id !== meId) {
+    return res.json({ found: false, hidden: true, phone: formatPhone(phone) });
+  }
   res.json({
     found: true,
     phone: formatPhone(phone),
-    user: publicUser(found),
+    user: publicUser(found, meId),
     chat_key: pairKey(meId, found.id),
     is_self: found.id === meId,
   });
@@ -2151,7 +2213,7 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
   if (!chats[inv.chat_key]) chats[inv.chat_key] = [];
   logEvent(inv.chat_key, 'joined', req.userId, `${eventActor(req.userId)} присоединился(лась) по ссылке`);
   broadcastTo(membersOf(inv.chat_key), { type: 'chat_updated', chat_key: inv.chat_key });
-  broadcastTo(meta.members, { type: 'users', users: usersSnapshot() });
+  broadcastTo(meta.members, { type: 'users', users: usersSnapshot(req.userId) });
   res.json({ chat: chatSummary(inv.chat_key, req.userId) });
 });
 
@@ -2264,7 +2326,7 @@ app.get('/api/stories', auth, (req, res) => {
     const u = users[uid];
     if (!u) continue;
     groupsByAuthor[uid] = {
-      user: publicUser(u),
+      user: publicUser(u, req.userId),
       items: alive.map((s) => storyCard(s, req.userId)),
     };
   }
@@ -2337,11 +2399,12 @@ app.delete('/api/messages/:id', auth, (req, res) => {
   res.status(404).json({ error: 'Сообщение не найдено' });
 });
 
-/* ==================== WEBSOCKET ==================== */
+/* ==================== WEBSOCKET ====================
+   Один и тот же обработчик вешаем на оба сервера: страница, открытая по
+   https://192.168.x.x:3443, соединяется по wss на том же порту. Иначе камера
+   работает, а сообщения и звонки — нет. */
 
-const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws, req) => {
+function handleSocket(ws, req) {
   const url = new URL(req.url, 'http://localhost');
   const token = url.searchParams.get('token');
   const userId = token && sessions.get(token);
@@ -2357,9 +2420,9 @@ wss.on('connection', (ws, req) => {
 
   if (firstConnection) {
     users[userId].last_seen = new Date().toISOString();
-    broadcast({ type: 'users', users: usersSnapshot() });
+    broadcastUsers();
   }
-  ws.send(JSON.stringify({ type: 'users', users: usersSnapshot() }));
+  ws.send(JSON.stringify({ type: 'users', users: usersSnapshot(userId) }));
 
   ws.on('message', (raw) => {
     let data;
@@ -2463,12 +2526,16 @@ wss.on('connection', (ws, req) => {
     if (s.size === 0) {
       sockets.delete(userId);
       users[userId].last_seen = new Date().toISOString();
-      broadcast({ type: 'users', users: usersSnapshot() });
+      broadcastUsers();
     }
   };
   ws.on('close', cleanup);
   ws.on('error', cleanup);
-});
+}
+
+const wss = new WebSocketServer({ server });
+wss.on('connection', handleSocket);
+let httpsWss = null;
 
 const heartbeat = setInterval(() => {
   for (const [, set] of sockets) {
@@ -2480,6 +2547,7 @@ const heartbeat = setInterval(() => {
   }
 }, 25000);
 wss.on('close', () => clearInterval(heartbeat));
+if (httpsWss) httpsWss.on('close', () => clearInterval(heartbeat));
 
 /* ==================== SPA ==================== */
 
@@ -2500,6 +2568,33 @@ server.listen(PORT, () => {
       (gw.ready ? 'ключи заданы' : 'НЕ хватает ' + gw.missing.join(', ') + ' (подробности: npm run doctor)');
   console.log('\n  MAXgram запущен: http://localhost:' + real);
   console.log('  SMS-провайдер: ' + smsLine + '\n');
+
+  // HTTPS вторым портом. Ошибку не валим: без него мессенджер работает, просто
+  // камера на других устройствах будет недоступна — об этом скажет экран сети.
+  if (!config.https.enabled) return;
+  try {
+    const hosts = lanAddresses();
+    const { key, cert, created, notAfter } = ensureCert(config.https.dir, { hosts });
+    httpsServer = https.createServer({ key, cert }, app);
+    httpsWss = new WebSocketServer({ server: httpsServer });
+    httpsWss.on('connection', handleSocket);
+    httpsWss.on('close', () => clearInterval(heartbeat));
+    httpsServer.on('error', (e) => {
+      console.log('  HTTPS не поднялся: ' + e.message);
+      httpsServer = null;
+      httpsCertInfo = null;
+    });
+    httpsServer.listen(config.https.port, () => {
+      const hp = httpsServer.address().port;
+      httpsCertInfo = { port: hp, hosts, created, notAfter };
+      const where = hosts.length ? hosts.map((ip) => `https://${ip}:${hp}`).join('  ') : `https://localhost:${hp}`;
+      console.log('  HTTPS для камеры и звонков: ' + where);
+      console.log('  Сертификат ' + (created ? 'создан' : 'переиспользован') + ', действует до ' +
+        notAfter.toLocaleDateString('ru-RU') + ' (принять один раз в браузере)\n');
+    });
+  } catch (e) {
+    console.log('  HTTPS не поднялся: ' + e.message + '\n');
+  }
 });
 
 // Для десктоп-обёртки (electron/main.js), которая подключает сервер как модуль

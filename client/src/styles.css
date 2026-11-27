@@ -4405,3 +4405,133 @@ textarea {
 
 
 
+
+/* ==================== ДОСТУП ПО СЕТИ ====================
+   Экран нужен, чтобы с телефона открыть именно https-адрес: по http браузер
+   не даёт камеру и микрофон, и видеокружок молча не работает. */
+.net-card {
+  width: min(520px, 94vw);
+}
+
+.net-lead {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.net-loading {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.net-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(51, 144, 236, 0.1);
+  border: 1px solid rgba(51, 144, 236, 0.35);
+  margin-bottom: 10px;
+}
+
+.net-main .net-url {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.net-url {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.net-copy {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.net-copy:hover {
+  background: var(--bg-hover);
+}
+
+.net-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.net-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+
+.net-row svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.net-row.muted {
+  opacity: 0.72;
+}
+
+.net-row.muted svg {
+  color: var(--text-secondary);
+}
+
+.net-note {
+  display: flex;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.net-note svg {
+  color: #4caf50;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.net-warn {
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(229, 83, 75, 0.12);
+  color: #e5534b;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+[data-theme='dark'] .net-warn {
+  color: #ff8a80;
+}
+
+.net-status {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}

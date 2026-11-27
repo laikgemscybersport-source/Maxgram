@@ -645,6 +645,48 @@ async function login(phone, profile) {
   const groupHandleDup = await req('/api/groups/' + mg.body.id, { method: 'PUT', body: JSON.stringify({ handle: 'maxgram_team' }) }, u1.token);
   ok('занятый адрес группы -> 409', groupHandleDup.status === 409);
 
+  // === 34. Скрытие номера телефона ===
+  // 34a. По умолчанию hide_phone = false — номер виден
+  const meU2 = await req('/api/me', {}, u2.token);
+  ok('hide_phone по умолчанию false', meU2.body.user.hide_phone === false);
+  const peersU2 = await req('/api/users/' + u2.user.id + '/chats', {}, u1.token);
+  const peerU2 = peersU2.body.find((c) => c.user.id === 'u2');
+  ok('номер u2 виден собеседнику', !!peerU2?.user.phone && peerU2.user.phone.startsWith('+'));
+  ok('phone_hidden=false для собеседника', peerU2.user.phone_hidden === false);
+
+  // 34b. Скрываем номер у u2
+  const hideOk = await req('/api/me', { method: 'PUT', body: JSON.stringify({ hide_phone: true }) }, u2.token);
+  ok('PUT /api/me: hide_phone сохранён', hideOk.status === 200 && hideOk.body.user.hide_phone === true);
+  // Собеседник (u1) видит скрытый номер
+  const peersAfter = await req('/api/users/' + u2.user.id + '/chats', {}, u1.token);
+  const peerAfter = peersAfter.body.find((c) => c.user.id === 'u2');
+  ok('номер скрыт от u1', peerAfter.user.phone === '' && peerAfter.user.phone_hidden === true);
+  // Сам u2 видит свой номер
+  const meU2Again = await req('/api/me', {}, u2.token);
+  ok('собственный номер виден всегда', !!meU2Again.body.user.phone_raw && meU2Again.body.user.phone_raw.startsWith('+'));
+
+  // 34c. Восстановить номер
+  await req('/api/me', { method: 'PUT', body: JSON.stringify({ hide_phone: false }) }, u2.token);
+
+  // 34d. Lookup по номеру скрытого пользователя
+  await req('/api/me', { method: 'PUT', body: JSON.stringify({ hide_phone: true }) }, u2.token);
+  const lookup = await req('/api/lookup-phone?phone=' + encodeURIComponent(u2.user.phone_raw), {}, u1.token);
+  ok('lookup скрытого номера -> found:false', lookup.status === 200 && lookup.body.found === false, JSON.stringify(lookup.body));
+  ok('lookup скрытого номера -> hidden:true', lookup.status === 200 && lookup.body.hidden === true);
+  // Восстановить номер
+  await req('/api/me', { method: 'PUT', body: JSON.stringify({ hide_phone: false }) }, u2.token);
+
+  // === 35. /api/netinfo ===
+  const net = await req('/api/netinfo', {}, u1.token);
+  ok('GET /api/netinfo -> 200', net.status === 200);
+  ok('netinfo: https_ready', net.body.https_ready === true);
+  ok('netinfo: secure_context', net.body.secure_context === false);
+  ok('netinfo: есть lan_https', Array.isArray(net.body.lan_https) && net.body.lan_https.length >= 1);
+  ok('netinfo: есть lan_http', Array.isArray(net.body.lan_http) && net.body.lan_http.length >= 1);
+  ok('netinfo: https_port', net.body.https_port === 3443);
+  ok('netinfo: http_port', net.body.http_port === 3000);
+  ok('netinfo: local_url указывает на localhost', net.body.local_url.startsWith('http://localhost:'));
+
   a.ws.close();
   b.ws.close();
   cu6.ws.close();

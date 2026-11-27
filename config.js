@@ -170,4 +170,16 @@ module.exports = {
     dir: process.env.UPLOAD_DIR || 'uploads',
     maxSizeMb: 64,
   },
+
+  // ---------- HTTPS для локальной сети ----------
+  // Браузер отдаёт камеру/микрофон только в безопасном контексте, поэтому без
+  // HTTPS по адресу 192.168.x.x видеокружок и видеозвонок не работают. Свой
+  // сертификат генерируется сам (tools/cert.js) — покупать домен не нужно.
+  https: {
+    enabled: String(pick('HTTPS', secrets.https_enabled, '1')) !== '0',
+    port: Number(pick('HTTPS_PORT', secrets.https_port, 3443)),
+    // Папка кэша: в десктопе кладём рядом с данными, иначе — в проект.
+    dir: process.env.HTTPS_CERT_DIR
+      || require('path').join(process.env.UPLOAD_DIR ? require('path').dirname(process.env.UPLOAD_DIR) : __dirname, 'certs'),
+  },
 };
