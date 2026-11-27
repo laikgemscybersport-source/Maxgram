@@ -162,6 +162,33 @@ module.exports = {
     perIpHour: Number(pick('SMS_LIMIT_IP', secrets.sms_limit_ip, 20)),
   },
 
+  // Публичный ли это сайт (доступен из интернета, а не только с localhost и из
+  // локальной сети). В публичном режиме нельзя показывать код на экране: иначе
+  // любой желающий войдёт под чужим номером, просто запросив код. Признаки
+  // публичности — явный внешний PUBLIC_URL или NODE_ENV=production; переопределить
+  // можно переменной PUBLIC_SITE=0|1.
+  publicSite: (() => {
+    const forced = String(pick('PUBLIC_SITE', secrets.public_site, '')).toLowerCase();
+    if (forced === '1' || forced === 'true') return true;
+    if (forced === '0' || forced === 'false') return false;
+    if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') return true;
+    const url = String(pick('PUBLIC_URL', secrets.public_url, ''));
+    if (!url) return false;
+    try {
+      const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
+      if (/^(localhost|127\.|::1$|0\.0\.0\.0$)/.test(host)) return false;
+      // Частные диапазоны — это локальная сеть, сайт ещё не публичный.
+      if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  })(),
+
+  // Разрешить демо-вход (код на экране) даже на публичном сайте. Только для
+  // отладки самого деплоя: с этой опцией под чужим номером входит любой.
+  allowDemoLogin: String(pick('SMS_ALLOW_DEMO', secrets.sms_allow_demo, '0')) === '1',
+
   // Карты: OpenStreetMap работает без ключей. Свой тайл-сервер можно указать здесь.
   tiles: process.env.TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
 

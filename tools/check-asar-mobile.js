@@ -52,6 +52,14 @@ const checks = [
   ['истории: кольцо-градиент', cssSrc.includes('--ring-a') && cssSrc.includes('linear-gradient(140deg')],
   ['истории: просмотренное гаснет', cssSrc.includes('.story.seen')],
   ['истории: демо-авторы на сервере', /stories\.u3\s*=/.test(serverSrc) && /stories\.u5\s*=/.test(serverSrc)],
+  // Демо-аккаунты только под флагом: по умолчанию база пустая, реальные пользователи не видят чужих переписок
+  ['демо: флаг SEED_DEMO в сервере', serverSrc.includes('SEED_DEMO')],
+  ['демо: seed-данные под условием', /if \(SEED_DEMO\)/.test(serverSrc)],
+  // Публичный сайт: демо-код не должен выдаваться на реальном домене
+  ['публичный режим: config.js', configSrc.includes('publicSite') && configSrc.includes('allowDemoLogin')],
+  ['публичный режим: отказ send-code', serverSrc.includes('sms_setup_required')],
+  ['публичный режим: sms_disabled в providers', serverSrc.includes('sms_disabled')],
+  ['публичный режим: предупреждение в клиенте', src.includes('sms_disabled') && src.includes('не настроен')],
   // Скрытие номера телефона: флаг в профиле, маскировка для чужих, запрет поиска
   ['телефон: флаг hide_phone на сервере', serverSrc.includes('hide_phone')],
   ['телефон: маскировка phone_hidden', serverSrc.includes('phone_hidden')],

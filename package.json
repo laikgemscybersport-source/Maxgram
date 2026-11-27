@@ -5,8 +5,9 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "node test.js",
+    "dev": "node -e \"process.env.SEED_DEMO='1'; require('./server.js')\"",
+    "test": "node -e \"process.env.SEED_DEMO='1'; require('./test.js')\"",
+    "check:public": "node tools/check-public.js",
     "doctor": "node tools/doctor.js",
     "client": "cd client && npm run dev",
     "build:client": "cd client && npm install && npm run build",

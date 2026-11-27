@@ -69,6 +69,13 @@ async function login(phone, profile) {
 (async () => {
   console.log('\n=== MAXgram: интеграционные тесты ===\n');
 
+  // Тесты полагаются на демо-аккаунты (u1–u5), поэтому требуют SEED_DEMO=1
+  if (process.env.SEED_DEMO !== '1') {
+    console.error('ОСТАНОВКА: тесты требуют SEED_DEMO=1 (иначе u1–u5 не созданы).');
+    console.error('Запустите: set SEED_DEMO=1 && set SMS_PROVIDER=demo && node test.js');
+    process.exit(1);
+  }
+
   // Тесты логинятся через demo_code на фиктивных номерах, поэтому сервер обязан
   // работать в demo-режиме. Иначе send-code отправит настоящие SMS на эти номера.
   const boot = await req('/api/auth/providers');

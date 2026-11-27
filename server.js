@@ -58,6 +58,15 @@ const oauthStates = new Map();
 
 const STORY_TTL = 24 * 3600 * 1000;
 
+/* Демо-наполнение (аккаунты u1–u5, группы, каналы, переписка, истории) нужно
+   только для локальной разработки и интеграционных тестов. На публичном сайте
+   оно превращается в дыру: номера демо-аккаунтов лежат в исходниках, и войти под
+   ними смог бы любой. Поэтому по умолчанию база пустая, а демо включается явно:
+   SEED_DEMO=1 node server.js */
+const SEED_DEMO = String(process.env.SEED_DEMO || '0') === '1';
+
+if (SEED_DEMO) {
+
 const DEMO_ACCOUNTS = [
   { id: 'u1', name: 'Алексей', phone: '+79991234567', username: 'alexey', bio: 'Разработчик. Люблю код и кофе ☕' },
   { id: 'u2', name: 'Мария', phone: '+79992345678', username: 'masha', bio: 'Дизайнер. Рисую интерфейсы 🎨' },
@@ -171,6 +180,8 @@ stories.u5 = [
 stories.u1 = [
   { id: uuidv4(), author_id: 'u1', kind: 'text', media: null, caption: 'Собираем MAXgram: звонки, истории, каналы', created_at: hoursAgo(4), expires: Date.now() + 20 * 3600 * 1000, views: [] },
 ];
+
+} // SEED_DEMO
 
 /* ==================== СОХРАНЕНИЕ НА ДИСК ====================
    По умолчанию (веб-деплой) всё живёт в памяти — как раньше.
@@ -1047,6 +1058,17 @@ app.post('/api/auth/send-code', async (req, res) => {
     });
   }
 
+  // Демо-вход на публичном сайте — это вход под чужим номером: код видит любой,
+  // кто запросил его для этого номера. Поэтому там он закрыт, а не «просто
+  // неудобен»: без реального SMS-шлюза сайт честно отказывает.
+  if (config.sms.provider === 'demo' && config.publicSite && !config.allowDemoLogin) {
+    return res.status(503).json({
+      error: 'Вход по SMS на этом сайте не настроен. Администратору: включите реальный SMS-шлюз '
+        + '(SMS_PROVIDER=smsgate|smsru|smsaero|twilio) либо Google-вход (GOOGLE_CLIENT_ID/SECRET).',
+      sms_setup_required: true,
+    });
+  }
+
   const ip = req.ip || req.socket.remoteAddress || '';
   if (!allowSend(hitsByPhone, phone, config.rateLimit.perPhoneHour)) {
     return res.status(429).json({ error: 'Вы уже запрашивали коды несколько раз. Попробуйте через час.' });
@@ -1336,6 +1358,10 @@ app.get('/api/auth/providers', (_req, res) => {
     // расплывчатого «SMS не отправлены»
     sms_name: gw.name,
     sms_missing: gw.missing,
+    // Демо-вход закрыт (публичный сайт без реального шлюза): фронт покажет
+    // «вход по SMS не настроен» и предложит Google, вместо формы с кодом.
+    sms_disabled: config.sms.provider === 'demo' && config.publicSite && !config.allowDemoLogin,
+    public_site: config.publicSite,
   });
 });
 
@@ -1682,7 +1708,7 @@ function exportName(key, ext) {
 }
 
 function toHtml(key, list) {
-  const sum = chatSummary(key, list[0]?.sender_id || 'u1') || { user: { name: key } };
+  const sum = chatSummary(key, list[0]?.sender_id || '') || { user: { name: key } };
   const rows = list.map((m) => {
     const who = users[m.sender_id] ? users[m.sender_id].name : m.sender_id;
     const body = m.kind && m.kind !== 'text'

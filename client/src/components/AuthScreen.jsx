@@ -14,6 +14,10 @@ export default function AuthScreen({ onAuthed }) {
   const [providers, setProviders] = useState({})
   const [smsProvider, setSmsProvider] = useState('demo')
   const [smsInfo, setSmsInfo] = useState({ ready: true, name: 'demo', missing: [] })
+  // Публичный сайт без реального SMS-шлюза: вход по номеру выключен на сервере,
+  // поэтому форма с кодом не должна даже показываться — иначе человек введёт
+  // номер, нажмёт «Получить код» и получит отказ без объяснения.
+  const [smsDisabled, setSmsDisabled] = useState(false)
 
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
@@ -26,6 +30,7 @@ export default function AuthScreen({ onAuthed }) {
     api.providers().then((d) => {
       setProviders(d.providers || {})
       setSmsProvider(d.sms_provider || 'demo')
+      setSmsDisabled(!!d.sms_disabled)
       setSmsInfo({
         ready: d.sms_ready !== false,
         name: d.sms_name || d.sms_provider || 'demo',
@@ -169,20 +174,35 @@ export default function AuthScreen({ onAuthed }) {
         {step === 'phone' && (
           <>
             <h1>MAXgram</h1>
-            <p>Введите номер телефона — мы отправим SMS с кодом подтверждения.</p>
-            <input
-              className="search-input"
-              style={{ width: '100%', marginBottom: 12, textAlign: 'center', fontSize: 17 }}
-              placeholder="+7 (999) 123-45-67"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => setPhone(formatInput(e.target.value))}
-              onKeyDown={(e) => e.key === 'Enter' && phone.replace(/\D/g, '').length >= 11 && askCode()}
-            />
-            {error && <div className="auth-error">{error}</div>}
-            <button className="auth-primary" disabled={busy || phone.replace(/\D/g, '').length < 11} onClick={askCode}>
-              {busy ? 'Отправляем…' : 'Получить код по SMS'}
-            </button>
+            {smsDisabled ? (
+              <>
+                <p>Вход по номеру телефона на этом сайте не настроен.</p>
+                <div className="auth-note auth-note-warn">
+                  Администратору: включите реальный SMS-шлюз
+                  (<b>SMS_PROVIDER=smsgate</b>, <b>smsru</b>, <b>smsaero</b> или <b>twilio</b>
+                  {' '}с ключами) либо вход через Google (<b>GOOGLE_CLIENT_ID</b> и
+                  {' '}<b>GOOGLE_CLIENT_SECRET</b>). Демо-режим с кодом на экране на публичном
+                  сайте закрыт: иначе под чужим номером смог бы войти любой.
+                </div>
+              </>
+            ) : (
+              <>
+                <p>Введите номер телефона — мы отправим SMS с кодом подтверждения.</p>
+                <input
+                  className="search-input"
+                  style={{ width: '100%', marginBottom: 12, textAlign: 'center', fontSize: 17 }}
+                  placeholder="+7 (999) 123-45-67"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(formatInput(e.target.value))}
+                  onKeyDown={(e) => e.key === 'Enter' && phone.replace(/\D/g, '').length >= 11 && askCode()}
+                />
+                {error && <div className="auth-error">{error}</div>}
+                <button className="auth-primary" disabled={busy || phone.replace(/\D/g, '').length < 11} onClick={askCode}>
+                  {busy ? 'Отправляем…' : 'Получить код по SMS'}
+                </button>
+              </>
+            )}
 
             <div className="auth-divider">или войдите через</div>
             <div className="oauth-grid">
@@ -194,17 +214,17 @@ export default function AuthScreen({ onAuthed }) {
                 </button>
               ))}
             </div>
-            {smsProvider === 'demo' && (
+            {!smsDisabled && smsProvider === 'demo' && (
               <p className="auth-note">
                 Демо-режим SMS: код покажется на экране. Реальная доставка включается в messenger/secrets.js
               </p>
             )}
-            {smsProvider !== 'demo' && !smsInfo.ready && (
+            {!smsDisabled && smsProvider !== 'demo' && !smsInfo.ready && (
               <p className="auth-note auth-note-warn">
                 Выбран шлюз {smsInfo.name}, но не хватает ключей: {smsInfo.missing.join(', ')}. Пока вход по SMS недоступен.
               </p>
             )}
-            {smsProvider !== 'demo' && smsInfo.ready && (
+            {!smsDisabled && smsProvider !== 'demo' && smsInfo.ready && (
               <p className="auth-note">SMS отправляет {smsInfo.name}</p>
             )}
           </>
